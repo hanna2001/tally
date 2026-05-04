@@ -11,6 +11,11 @@ const totalSpent = transactions.reduce((sum, t) => sum + t.amount, 0);
 
 const returns = transactions.reduce((sum, t) => sum + t.returnAmount, 0);
 
+
+const noreturns = transactions
+  .filter(t => t.people?.find(p => p.name === "N"))
+  .reduce((sum, t) => sum + (t.returnAmount || 0), 0);
+
 const totalBalance = totalSpent - returns;
 
 const format = (num: number) =>
@@ -31,6 +36,7 @@ const format = (num: number) =>
       <StatCard 
         title="RETURNS" 
         value={format(returns)} 
+        change={format(returns -noreturns)} 
       />
     </div>
   );

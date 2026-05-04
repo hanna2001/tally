@@ -8,7 +8,7 @@ export default function TransactionTable({transactions}) {
   const [deletingId, setDeletingId] = useState(null);
   const [localTransactions, setLocalTransactions] = useState(transactions);
 
-   const handleDelete = async (id) => {
+  const handleDelete = async (id) => {
     if (!window.confirm("Delete this transaction?")) return;
     try {
       setDeletingId(id);
@@ -23,6 +23,12 @@ export default function TransactionTable({transactions}) {
  
   if (transactions !== localTransactions && !editingTransaction) {
     setLocalTransactions(transactions);
+  }
+
+  const formatPeople = (people)=>{
+  return people.map(p => `${p.name} (₹${p.owes})`)
+          .join(", ")
+
   }
 
 
@@ -52,7 +58,7 @@ export default function TransactionTable({transactions}) {
 
               <tbody>
                 {localTransactions.map((t) => (
-                  <tr key={t.id} className="border-b border-gray-200/50 last:border-none">
+                  <tr key={t.id} className="border-b border-gray-200/50 last:border-none ">
                     <td className="py-5">{new Date(t.date).toLocaleDateString()}</td>
 
                     <td className="py-5">{t.description}</td>
@@ -67,7 +73,7 @@ export default function TransactionTable({transactions}) {
                       ₹{t.returnAmount}
                     </td>
 
-                    <td className="p-5 text-gray-500">{t.people}</td>
+                    <td className="p-5 text-gray-500">{formatPeople(t.people)}</td>
 
                     <td className="p-5 text-gray-500">{t.method}</td>
 
@@ -75,7 +81,7 @@ export default function TransactionTable({transactions}) {
                       <div className="flex items-center gap-3">
                         <button
                           onClick={() => {
-                          console.log("EDIT initialData:", JSON.stringify(t, null, 2)); // CHANGES: debug — remove after confirming shape
+                          console.log("EDIT initialData:", JSON.stringify(t, null, 2));
                           setEditingTransaction(t);
                         }}
                           className="text-xs font-semibold tracking-wide uppercase transition-colors"

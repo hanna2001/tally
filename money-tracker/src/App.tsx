@@ -37,8 +37,6 @@ export default function App() {
       method: t.method,
       returnAmount: t.return,
       people: participants
-        .map(p => `${p.name} (₹${p.owes})`)
-        .join(", ")
     };
   });
     console.log("cleaned:",cleaned);
