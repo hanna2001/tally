@@ -8,7 +8,7 @@
 // GraphQL, etc.) — change only this file.
 // ─────────────────────────────────────────────────────────────────
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
+const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api/transactions";
 
 async function handleResponse(res) {
   const json = await res.json().catch(() => ({}));
@@ -19,10 +19,10 @@ async function handleResponse(res) {
 }
 
 // ── Save a new transaction ────────────────────────────────────────
-export async function saveTransaction(formData) {
-    console.log(formData);
-    
-  const res = await fetch(`${BASE_URL}/transactions`, {
+export async function saveTransaction(filename,formData) {
+
+  
+  const res = await fetch(`${BASE_URL}/${filename}/`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(formData),
@@ -31,14 +31,14 @@ export async function saveTransaction(formData) {
 }
 
 // ── Load all transactions ─────────────────────────────────────────
-export async function loadTransactions() {
-  const res = await fetch(`${BASE_URL}/transactions`);
+export async function loadTransactions(filename) {
+  const res = await fetch(`${BASE_URL}/${filename}/`);
   return handleResponse(res);
 }
 
 // ── Delete a transaction by id ────────────────────────────────────
-export async function deleteTransaction(id) {
-  const res = await fetch(`${BASE_URL}/transactions/${id}`, {
+export async function deleteTransaction(filename,id) {
+  const res = await fetch(`${BASE_URL}/${filename}/${id}`, {
     method: "DELETE",
   });
   return handleResponse(res);
@@ -47,11 +47,11 @@ export async function deleteTransaction(id) {
 // ── Download CSV export ───────────────────────────────────────────
 export function exportToCsv() {
   // Opens the export endpoint — browser handles the download prompt
-  window.open(`${BASE_URL}/transactions/export`, "_blank");
+  window.open(`${BASE_URL}/export`, "_blank");
 }
 
-export async function updateTransaction(id, formData) {
-  const res = await fetch(`${BASE_URL}/transactions/${id}`, {
+export async function updateTransaction(filename,id, formData) {
+  const res = await fetch(`${BASE_URL}/${filename}/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(formData),

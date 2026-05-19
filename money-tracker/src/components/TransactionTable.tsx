@@ -1,43 +1,50 @@
-import { useState } from "react"; 
+import { useState,useEffect } from "react"; 
 import { deleteTransaction } from "../services/transactionService";
 import RecordTransaction from "./AddTransactionModal"; // CHANGES: import modal
 
-export default function TransactionTable({transactions}) {
-  // CHANGES: state for edit modal and delete confirmation
+export default function TransactionTable({sheetname,transactions,setTransactions,setModal}) {
+
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
-  const [localTransactions, setLocalTransactions] = useState(transactions);
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Delete this transaction?")) return;
-    try {
-      setDeletingId(id);
-      await deleteTransaction(id);
-      setLocalTransactions((prev) => prev.filter((t) => t.id !== id));
-    } catch (err) {
-      alert("Failed to delete: " + err.message);
-    } finally {
-      setDeletingId(null);
-    }
-  };
- 
-  if (transactions !== localTransactions && !editingTransaction) {
-    setLocalTransactions(transactions);
+  if (!window.confirm("Delete this transaction?")) return;
+  try {
+    setDeletingId(id);
+    await deleteTransaction(sheetname, id);
+    setTransactions((prev) => prev.filter((t) => String(t.id) !== String(id)));
+  } catch (err) {
+    alert("Failed to delete: " + err.message);
+  } finally {
+    setDeletingId(null);
   }
+};
+ 
+  useEffect(() => {
+  if (!editingTransaction) {
+
+  }
+}, [transactions, editingTransaction]);
 
   const formatPeople = (people)=>{
-  return people.map(p => `${p.name} (₹${p.owes})`)
+  return people?.map(p => `${p.name} (₹${p.owes})`)
           .join(", ")
 
   }
-
 
     return (
     <div className="px-10">
 
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-medium">RECENT ACTIVITY</h3>
-        <div className="text-sm text-gray-500 tracking-widest">FILTER | EXPORT</div>
+        <div className="text-sm text-gray-500 tracking-widest">
+          <button
+                    onClick={() => setModal(true)}
+                    className=" bg-transparent text-sm text-[#8C5A3C] p-4 rounded-xl border border-[#8C5A3C]/20 hover:bg-[#8C5A3C]/10"
+                  >
+                    + TRANSACTION
+                  </button>
+        </div>
       </div>
 
       <div className="bg-transparent shadow-sm overflow-hidden">
@@ -57,7 +64,7 @@ export default function TransactionTable({transactions}) {
               </thead>
 
               <tbody>
-                {localTransactions.map((t) => (
+                {transactions.map((t) => (
                   <tr key={t.id} className="border-b border-gray-200/50 last:border-none ">
                     <td className="py-5">{new Date(t.date).toLocaleDateString()}</td>
 
@@ -81,7 +88,6 @@ export default function TransactionTable({transactions}) {
                       <div className="flex items-center gap-3">
                         <button
                           onClick={() => {
-                          console.log("EDIT initialData:", JSON.stringify(t, null, 2));
                           setEditingTransaction(t);
                         }}
                           className="text-xs font-semibold tracking-wide uppercase transition-colors"
@@ -111,12 +117,28 @@ export default function TransactionTable({transactions}) {
       </div>
       {editingTransaction && (
         <RecordTransaction
+          sheetName={sheetname}
           initialData={editingTransaction}
           onClose={() => setEditingTransaction(null)}
           onSaved={(updated) => {
-            setLocalTransactions((prev) =>
-              prev.map((t) => (t.id === updated.id ? updated : t))
+            const normalized = {
+              ...updated,
+              amount: Number(updated.amount),
+              returnAmount: Number(updated.returnAmount || 0),
+
+              people: (updated.people || []).map((p) => ({
+                ...p,
+                owes: Number(p.owes),
+              })),
+            };
+            setTransactions((prev) =>
+              prev.map((t) =>
+                String(t.id) === String(normalized.id)
+                  ? { ...t, ...normalized }
+                  : t
+              )
             );
+
             setEditingTransaction(null);
           }}
         />

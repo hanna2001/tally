@@ -26,7 +26,7 @@ const selectStyle = {
 
 const CURRENT_USER = "You";
 
-export default function RecordTransaction({ onClose, onSaved, initialData = null, currentUser = CURRENT_USER }) {
+export default function AddTransactionModal({ sheetName, onClose, onSaved, initialData = null, currentUser = CURRENT_USER }) {
   const [categories, setCategories] = useState([]);
   const [methods, setMethods] = useState([]);
   const [allParticipants, setAllParticipants] = useState([]);
@@ -73,6 +73,44 @@ export default function RecordTransaction({ onClose, onSaved, initialData = null
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+
+useEffect(() => {
+  if (!initialData) return;
+
+  setAmount(initialData.amount ?? "");
+  setDate(initialData.date ?? "");
+  setDescription(initialData.description ?? "");
+  setCategory(initialData.category ?? "");
+  setMethod(initialData.method ?? "");
+  setTaxReturnable(initialData.taxReturnable ?? true);
+  setNotes(initialData.notes ?? "");
+
+  const raw = initialData?.participants ?? initialData?.people ?? [];
+
+  let arr = [];
+
+  if (Array.isArray(raw)) {
+    arr = raw;
+  } else if (typeof raw === "string" && raw.includes("|")) {
+    arr = raw.split("|").filter(Boolean).map((p) => {
+      const [name, owes] = p.split(":");
+
+      return {
+        name: name?.trim(),
+        owes: owes?.trim() || "0",
+      };
+    });
+  }
+
+  setPeople(
+    arr.map((p) => ({
+      ...p,
+      isYou: p.name === CURRENT_USER || p.isYou === true,
+    }))
+  );
+}, [initialData]);
+
 
   useEffect(() => {
     Promise.all([
@@ -122,13 +160,12 @@ export default function RecordTransaction({ onClose, onSaved, initialData = null
 
 
   const updateOwes = (name, raw) => {
-    console.log(name,raw);
     
     const clean = raw
       .replace(/[^0-9.\-]/g, "")           // strip everything except digits, dot, minus
       .replace(/(?!^)-/g, "")              // only allow minus at the very start
       .replace(/(\..*?)\..*/g, "$1");       // only one decimal point
-    console.log(clean);
+
     
     setPeople(people.map((p) => (p.name === name ? { ...p, owes: clean } : p)));
   };
@@ -137,21 +174,29 @@ export default function RecordTransaction({ onClose, onSaved, initialData = null
     setSaveError(null);
     setSaving(true);
     try {
-      console.log(people);
       
-      const payload = { date, description, amount, category, method, taxReturnable, participants: people, notes };
+      const payload = { date, description, amount, category, method, taxReturnable, people, notes };
       let result;
-      if (initialData?.id) {
-        result = await updateTransaction(initialData.id, payload);
+      if (initialData?.id) {      
+        result = await updateTransaction(sheetName,initialData.id, payload);
+        const returnAmount = result?.people
+          .filter((p) => p.name !== "You")
+          .reduce(
+            (sum, p) => sum + (parseFloat(p.owes) || 0),
+            0
+          );
+        result= {...result,returnAmount}
+        
         onSaved?.(result);
       } else {
-        result = await saveTransaction(payload);
+        result = await saveTransaction(sheetName,payload);
         onSaved?.(result);
       }
       setSaveSuccess(true);
       setTimeout(() => onClose?.(), 1200);
     } catch (err) {
       setSaveError(err.message);
+
     } finally {
       setSaving(false);
     }

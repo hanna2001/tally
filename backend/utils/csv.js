@@ -6,7 +6,7 @@ const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
 
-const CSV_PATH = path.join(__dirname, "..", "data", "transactions.csv");
+const CSV_PATH = path.join(__dirname, "..", "data");
 
 const HEADERS = [
   "id",
@@ -65,28 +65,29 @@ function lineToRow(values) {
 // ── Public API ────────────────────────────────────────────────────
 
 /** Ensure the CSV file + data directory exist, write headers if new */
-function ensureFile() {
-  const dir = path.dirname(CSV_PATH);
+function ensureFile(file_path) {
+  const dir = path.dirname(file_path);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(CSV_PATH) || fs.readFileSync(CSV_PATH, "utf8").trim() === "") {
-    fs.writeFileSync(CSV_PATH, HEADERS.join(",") + "\r\n", "utf8");
+  if (!fs.existsSync(file_path) || fs.readFileSync(file_path, "utf8").trim() === "") {
+    fs.writeFileSync(file_path, HEADERS.join(",") + "\r\n", "utf8");
   }
 }
 
 /** Read all transactions from CSV → array of objects */
-async function readAll() {
-  ensureFile();
+async function readAll(filename) {
+  const file_path = path.join(CSV_PATH,`${filename}.csv`)
+  ensureFile(file_path);
   return new Promise((resolve, reject) => {
     const rows = [];
     const rl = readline.createInterface({
-      input: fs.createReadStream(CSV_PATH),
+      input: fs.createReadStream(file_path),
       crlfDelay: Infinity,
     });
  
     const headerLine = HEADERS.join(",");
     rl.on("line", (line) => {
       if (!line.trim()) return;
-      if (line.trim() === headerLine) return; // CHANGES: skip ALL header-looking rows, not just the first — fixes duplicate header treated as data row
+      if (line.trim() === headerLine) return; 
       rows.push(lineToRow(parseLine(line)));
     });
  
@@ -96,17 +97,19 @@ async function readAll() {
 }
 
 /** Append a single transaction row to the CSV */
-function appendOne(transaction) {
-  ensureFile();
+function appendOne(filename,transaction) {
+  const file_path = path.join(CSV_PATH,`${filename}.csv`)
+  ensureFile(file_path);
   const line = rowToLine(transaction) + "\r\n";
-  fs.appendFileSync(CSV_PATH, line, "utf8");
+  fs.appendFileSync(file_path, line, "utf8");
 }
 
 /** Rewrite the entire CSV (used for delete / update) */
-function writeAll(transactions) {
-  ensureFile();
+function writeAll(filename,transactions) {
+  const file_path = path.join(CSV_PATH,`${filename}.csv`)
+  ensureFile(file_path);
   const lines = [HEADERS.join(","), ...transactions.map(rowToLine)];
-  fs.writeFileSync(CSV_PATH, lines.join("\r\n") + "\r\n", "utf8");
+  fs.writeFileSync(file_path, lines.join("\r\n") + "\r\n", "utf8");
 }
 
-module.exports = { readAll, appendOne, writeAll, CSV_PATH };
+module.exports = { readAll, appendOne, writeAll };

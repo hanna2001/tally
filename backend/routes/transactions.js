@@ -2,10 +2,12 @@
 
 const express = require("express");
 const { randomUUID } = require("crypto");
-const { readAll, appendOne, writeAll, CSV_PATH } = require("../utils/csv");
+const { readAll, appendOne, writeAll } = require("../utils/csv");
 const fs = require("fs");
 
 const router = express.Router();
+
+
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -36,33 +38,33 @@ function findReturn(str){
 
 }
 
-// ── GET /api/transactions/export  (must be BEFORE /:id) ───────────
-router.get("/export", (req, res) => {
-  try {
-    if (!fs.existsSync(CSV_PATH)) {
-      return res.status(404).json({ success: false, message: "No transactions yet." });
-    }
-    const filename = `transactions_${new Date().toISOString().slice(0, 10)}.csv`;
-    res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    fs.createReadStream(CSV_PATH).pipe(res);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Failed to export." });
-  }
-});
+// // ── GET /api/transactions/export  (must be BEFORE /:id) ───────────
+// router.get("/export", (req, res) => {
+//   try {
+//     if (!fs.existsSync(CSV_PATH)) {
+//       return res.status(404).json({ success: false, message: "No transactions yet." });
+//     }
+//     const filename = `transactions_${new Date().toISOString().slice(0, 10)}.csv`;
+//     res.setHeader("Content-Type", "text/csv");
+//     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+//     fs.createReadStream(CSV_PATH).pipe(res);
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ success: false, message: "Failed to export." });
+//   }
+// });
 
 // ── GET /api/transactions ─────────────────────────────────────────
-router.get("/", async (req, res) => {
+router.get("/:filename", async (req, res) => {
+  const { filename } = req.params;
   try {
-    const rows = await readAll();
+    const rows = await readAll(filename);
     
     const transactions = rows.map((r) => ({
       ...r,
       participants: deserializeParticipants(r.participants),
       return: findReturn(r.participants)}))
     .sort((a, b) => new Date(a.date) - new Date(b.date));
-    console.log(transactions)
     res.json({ success: true, data: transactions });
   } catch (err) {
     console.error(err);
@@ -71,9 +73,10 @@ router.get("/", async (req, res) => {
 });
 
 // ── POST /api/transactions ────────────────────────────────────────
-router.post("/", async (req, res) => {
+router.post("/:filename", async (req, res) => {
   try {
-    const { date, description, amount, category, method, taxReturnable, participants, notes } = req.body;
+    const {filename} =req.params;
+    const { date, description, amount, category, method, taxReturnable, people, notes } = req.body;
 
     if (!amount || isNaN(parseFloat(amount))) {
       return res.status(400).json({ success: false, message: "Invalid amount." });
@@ -83,8 +86,8 @@ router.post("/", async (req, res) => {
     }
 
     // Validate participant totals if participants are provided
-    if (Array.isArray(participants) && participants.length > 0) {
-      const participantTotal = participants.reduce((sum, p) => sum + (parseFloat(p.owes) || 0), 0);
+    if (Array.isArray(people) && people.length > 0) {
+      const participantTotal = people.reduce((sum, p) => sum + (parseFloat(p.owes) || 0), 0);
       const diff = Math.abs(parseFloat(amount) - Math.abs(participantTotal));
 
       if (diff > 0.01) {
@@ -104,13 +107,20 @@ router.post("/", async (req, res) => {
       category: category || "",
       method: method || "",
       taxReturnable: taxReturnable ? "yes" : "no",
-      participants: serializeParticipants(participants),
+      participants: serializeParticipants(people),
       notes: notes || "",
     };
 
-    appendOne(transaction);
-
-    res.status(201).json({ success: true, data: transaction });
+    appendOne(filename,transaction);
+    res.json({
+      success: true,
+      data: {
+        ...transaction,
+        amount: Number(transaction.amount),
+        people: deserializeParticipants(transaction.participants),
+        returnAmount: findReturn(transaction.participants)
+      },
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to save transaction." });
@@ -118,17 +128,17 @@ router.post("/", async (req, res) => {
 });
 
 // ── DELETE /api/transactions/:id ──────────────────────────────────
-router.delete("/:id", async (req, res) => {
+router.delete("/:filename/:id", async (req, res) => {
   try {
-    const { id } = req.params;
-    const rows = await readAll();
+    const { filename,id } = req.params;
+    const rows = await readAll(filename);
     const filtered = rows.filter((r) => r.id !== id);
 
     if (filtered.length === rows.length) {
       return res.status(404).json({ success: false, message: "Transaction not found." });
     }
 
-    writeAll(filtered);
+    writeAll(filename,filtered);
     res.json({ success: true, message: "Transaction deleted." });
   } catch (err) {
     console.error(err);
@@ -137,11 +147,11 @@ router.delete("/:id", async (req, res) => {
 });
 
 
-router.put("/:id", async (req, res) => {
+router.put("/:filename/:id", async (req, res) => {
   try {
-    const { id } = req.params;
-    const { date, description, amount, category, method, taxReturnable, participants, notes } = req.body;
- 
+    const { id, filename } = req.params;
+    const { date, description, amount, category, method, taxReturnable, people, notes } = req.body;
+    
     if (!amount || isNaN(parseFloat(amount))) {
       return res.status(400).json({ success: false, message: "Invalid amount." });
     }
@@ -149,8 +159,8 @@ router.put("/:id", async (req, res) => {
       return res.status(400).json({ success: false, message: "Date is required." });
     }
  
-    if (Array.isArray(participants) && participants.length > 0) {
-      const participantTotal = participants.reduce((sum, p) => sum + (parseFloat(p.owes) || 0), 0);
+    if (Array.isArray(people) && people.length > 0) {
+      const participantTotal = people.reduce((sum, p) => sum + (parseFloat(p.owes) || 0), 0);
       const diff = Math.abs(parseFloat(amount) - Math.abs(participantTotal));
       if (diff > 0.01) {
         return res.status(400).json({
@@ -160,7 +170,7 @@ router.put("/:id", async (req, res) => {
       }
     }
  
-    const rows = await readAll();
+    const rows = await readAll(filename);
     const index = rows.findIndex((r) => r.id?.trim() === id?.trim()); // CHANGES: trimmed comparison
  
     if (index === -1) {
@@ -175,19 +185,19 @@ router.put("/:id", async (req, res) => {
       category: category || "",
       method: method || "",
       taxReturnable: taxReturnable ? "yes" : "no",
-      participants: serializeParticipants(participants),
+      participants: serializeParticipants(people),
       notes: notes || "",
     };
+    
  
     rows[index] = updated;
-    writeAll(rows); // CHANGES: rewrites entire CSV with updated row in place
+    writeAll(filename,rows); // CHANGES: rewrites entire CSV with updated row in place
  
     res.json({
       success: true,
       data: {
         ...updated,
-        taxReturnable: updated.taxReturnable === "yes",
-        participants: deserializeParticipants(updated.participants),
+        people: deserializeParticipants(updated.participants),
       },
     });
   } catch (err) {
