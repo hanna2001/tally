@@ -38,6 +38,22 @@ function findReturn(str){
 
 }
 
+
+function transactionData(transaction){
+  return {
+    id: transaction.id,
+    date: transaction.date,
+    description: transaction.description,
+    amount: parseFloat(transaction.amount),
+    category: transaction.category,
+    method: transaction.method,
+    people: deserializeParticipants(transaction.participants)|| [],
+    returnAmount: findReturn(transaction.participants),
+    notes: transaction.notes
+  }
+}
+
+
 // // ── GET /api/transactions/export  (must be BEFORE /:id) ───────────
 // router.get("/export", (req, res) => {
 //   try {
@@ -59,11 +75,7 @@ router.get("/:filename", async (req, res) => {
   const { filename } = req.params;
   try {
     const rows = await readAll(filename);
-    
-    const transactions = rows.map((r) => ({
-      ...r,
-      participants: deserializeParticipants(r.participants),
-      return: findReturn(r.participants)}))
+    const transactions = rows.map((r) => (transactionData(r)))
     .sort((a, b) => new Date(a.date) - new Date(b.date));
     res.json({ success: true, data: transactions });
   } catch (err) {
@@ -114,12 +126,7 @@ router.post("/:filename", async (req, res) => {
     appendOne(filename,transaction);
     res.json({
       success: true,
-      data: {
-        ...transaction,
-        amount: Number(transaction.amount),
-        people: deserializeParticipants(transaction.participants),
-        returnAmount: findReturn(transaction.participants)
-      },
+      data: transactionData(transaction),
     });
   } catch (err) {
     console.error(err);
@@ -191,14 +198,11 @@ router.put("/:filename/:id", async (req, res) => {
     
  
     rows[index] = updated;
-    writeAll(filename,rows); // CHANGES: rewrites entire CSV with updated row in place
+    writeAll(filename,rows);
  
     res.json({
       success: true,
-      data: {
-        ...updated,
-        people: deserializeParticipants(updated.participants),
-      },
+      data: transactionData(updated),
     });
   } catch (err) {
     console.error(err);

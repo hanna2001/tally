@@ -18,25 +18,8 @@ export default function Sheet() {
         async function fetchData() {
         try {
             const res = await loadTransactions(sheetName);
-    
-    
-            const cleaned = res.map((t) => {
-              const amount = Number(t.amount);
-          
-              const participants = t.participants || [];
-              return {
-                  id: t.id,
-                  date: t.date,
-                  description: t.description,
-                  category: t.category,
-                  amount,
-                  method: t.method,
-                  returnAmount: t.return,
-                  people: participants
-              };
-            });
-            
-            setTransactions(cleaned);
+            setTransactions(res);
+
                 
         } catch (error) {
             
