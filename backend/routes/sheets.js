@@ -30,7 +30,7 @@ router.post("/", (req, res) => {
       return res.status(409).json({ error: `Sheet "${name}" already exists.` });
     }
 
-    fs.writeFileSync(filePath, "utf8");
+    fs.writeFileSync(filePath, "");
 
     return res.status(201).json({
       message: `Sheet "${name}" created successfully.`,

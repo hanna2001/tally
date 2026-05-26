@@ -42,19 +42,6 @@ export default function Sheet() {
             sheetName={sheetName}
             onClose={() => setShowModal(false)}
             onSaved={(newTx: any) => {
-              // const cleaned = {
-              //     id: newTx.id,
-              //     date: newTx.date,
-              //     description: newTx.description,
-              //     category: newTx.category,
-              //     amount: Number(newTx.amount),
-              //     method: newTx.method,
-              //     returnAmount: Number(newTx.returnAmount || 0),
-              //     people: (newTx.people || []).map((p) => ({
-              //       ...p,
-              //       owes: Number(p.owes),
-              //     })),
-              //   };
               setTransactions((prev) => [ ...prev,newTx]);
               // setShowModal(false);
             }}

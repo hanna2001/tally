@@ -21,8 +21,8 @@ export default function Recents() {
     }
   }
 
-  const handleCreateSheet = async () => {
-    await createSheet("mayff");
+  const handleCreateSheet = async (name:string) => {
+    await createSheet(name);
     fetchData();
   };
 
@@ -79,7 +79,8 @@ export default function Recents() {
           gap: "20px",
         }}>
           {sheets.map((sheet:Sheet) => (
-            <CollectionCard key={sheet.name} sheet={sheet} />
+            <CollectionCard key={sheet.name} sheet={sheet} onDeleted={(name) => setSheets((prev) => prev.filter((s) => s.name !== name))}/>
+
           ))}
           <CreateCard onCreate={handleCreateSheet}/>
         </div>

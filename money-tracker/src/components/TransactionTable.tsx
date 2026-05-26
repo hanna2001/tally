@@ -73,7 +73,7 @@ export default function TransactionTable({sheetname,transactions,setTransactions
                     <td className="py-5 text-gray-500">{t.category}</td>
 
                     <td className="py-5 font-medium">
-                      ₹{t.amount.toLocaleString()}
+                      ₹{t?.amount?.toLocaleString()}
                     </td>
 
                     <td className="py-5">
