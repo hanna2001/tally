@@ -1,8 +1,8 @@
 const express = require("express");
 const cors = require("cors");
 const compression = require("compression");
-const transactionRoutes = require("./routes/transactions");
-const sheetsRouter = require("./routes/sheets")
+const transactionRoutes = require("./routes/transaction");
+const sheetsRouter = require("./routes/sheet")
  
 const app = express();
 app.use(compression());
