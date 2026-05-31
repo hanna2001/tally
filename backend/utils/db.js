@@ -2,7 +2,7 @@ const Database = require("better-sqlite3");
 const path = require("path");
 const { randomUUID } = require("crypto");
 
-const db = new Database(path.join(__dirname, "../data/data.db"));
+const db = new Database(path.join(__dirname, "../data/database.db"));
 db.pragma("foreign_keys = ON");
 
 db.exec(`
@@ -23,15 +23,43 @@ db.exec(`
     method TEXT DEFAULT '',
     taxReturnable INTEGER DEFAULT 0,
     notes TEXT DEFAULT '',
-    FOREIGN KEY (sheetId) REFERENCES sheets(id) ON DELETE CASCADE
+    categoryId TEXT,
+    paymentMethodId TEXT,
+    FOREIGN KEY (sheetId) REFERENCES sheets(id) ON DELETE CASCADE,
+    FOREIGN KEY (categoryId) REFERENCES categories(id) ON DELETE SET NULL,
+    FOREIGN KEY (paymentMethodId) REFERENCES payment_methods(id) ON DELETE SET NULL
   );
 
   CREATE TABLE IF NOT EXISTS participants (
     id TEXT PRIMARY KEY,
     transactionId TEXT NOT NULL,
     name TEXT NOT NULL,
-    owes REAL NOT NULL,
-    FOREIGN KEY (transactionId) REFERENCES transactions(id) ON DELETE CASCADE
+    owes REAL NOT NULL DEFAULT 0,
+    personId TEXT,
+    FOREIGN KEY (transactionId) REFERENCES transactions(id) ON DELETE CASCADE,
+    FOREIGN KEY (personId) REFERENCES people(id) ON DELETE SET NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS categories (
+    id TEXT PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    createdAt TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS people (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    role TEXT DEFAULT 'Contributor',
+    createdAt TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS payment_methods (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    detail TEXT DEFAULT '',
+    badge TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    createdAt TEXT NOT NULL
   );
 `);
 
@@ -62,17 +90,30 @@ function readAll(sheetName) {
   }));
 }
 
-function transactionAmout() {
-  
-  const transactions = db.prepare(`
-    SELECT SUM(amount) FROM transactions 
-  `).all();
+function totalTransactionAmout() {
+  const total_amount = db.prepare(`
+    SELECT SUM(amount) as total FROM transactions 
+  `).get();
 
-  return transactions.map(t => ({
-    ...t,
-    amount: t.amount,
-    participants: getParticipants(t.id),  // array of {name, owes} directly
-  }));
+  const owed_amount = db.prepare(`
+    SELECT COALESCE(SUM(p.owes), 0) as total
+    FROM participants p
+    WHERE p.name != 'You'
+    AND p.owes > 0
+  `).get();
+
+  const owes_amount = db.prepare(`
+    SELECT COALESCE(SUM(p.owes), 0) as total
+    FROM participants p
+    WHERE p.name != 'You'
+    AND p.owes < 0
+  `).get();
+
+  return {
+    total_amount:total_amount.total,
+    owed_amount:owed_amount.total,
+    owes_amount:owes_amount.total
+  };
 }
 
 function appendOne(sheetName, transaction) {
@@ -163,4 +204,86 @@ function deleteSheet(name) {
   db.prepare("DELETE FROM sheets WHERE name = ?").run(name);
 }
 
-module.exports = { readAll, appendOne, updateOne, deleteOne, transactionAmout, createSheet, listSheets, deleteSheet };
+
+// ── Categories ────────────────────────────────────────────────────
+
+function listCategories() {
+  return db.prepare("SELECT * FROM categories ORDER BY createdAt ASC").all();
+}
+
+function createCategory(name) {
+  const existing = db.prepare("SELECT id FROM categories WHERE name = ?").get(name);
+  if (existing) throw Object.assign(new Error(`Category "${name}" already exists.`), { code: 409 });
+  const id = randomUUID();
+  db.prepare("INSERT INTO categories (id, name, createdAt) VALUES (?, ?, ?)").run(id, name, new Date().toISOString());
+  return { id, name };
+}
+
+function updateCategory(id, name) {
+  const result = db.prepare("UPDATE categories SET name = ? WHERE id = ?").run(name, id);
+  if (result.changes === 0) throw Object.assign(new Error("Category not found."), { code: 404 });
+  return { id, name };
+}
+
+function deleteCategory(id) {
+  const result = db.prepare("DELETE FROM categories WHERE id = ?").run(id);
+  if (result.changes === 0) throw Object.assign(new Error("Category not found."), { code: 404 });
+}
+
+// ── People ────────────────────────────────────────────────────────
+
+function listPeople() {
+  return db.prepare("SELECT * FROM people ORDER BY createdAt ASC").all();
+}
+
+function createPerson(name, role = "Contributor") {
+  const id = randomUUID();
+  db.prepare("INSERT INTO people (id, name, role, createdAt) VALUES (?, ?, ?, ?)").run(id, name, role, new Date().toISOString());
+  return { id, name, role };
+}
+
+function updatePerson(id, name, role) {
+  const result = db.prepare("UPDATE people SET name = ?, role = ? WHERE id = ?").run(name, role, id);
+  if (result.changes === 0) throw Object.assign(new Error("Person not found."), { code: 404 });
+  return { id, name, role };
+}
+
+function deletePerson(id) {
+  const result = db.prepare("DELETE FROM people WHERE id = ?").run(id);
+  if (result.changes === 0) throw Object.assign(new Error("Person not found."), { code: 404 });
+}
+
+// ── Payment Methods ───────────────────────────────────────────────
+
+function listPaymentMethods() {
+  return db.prepare("SELECT * FROM payment_methods ORDER BY createdAt ASC").all();
+}
+
+function createPaymentMethod({ name, detail, badge, notes }) {
+  const existing = db.prepare("SELECT id FROM payment_methods WHERE name = ?").get(name);
+  if (existing) throw Object.assign(new Error(`Payment method "${name}" already exists.`), { code: 409 });
+  const id = randomUUID();
+  db.prepare("INSERT INTO payment_methods (id, name, detail, badge, notes, createdAt) VALUES (?, ?, ?, ?, ?, ?)").run(
+    id, name, detail || "", badge || "", notes || "", new Date().toISOString()
+  );
+  return { id, name, detail, badge, notes };
+}
+
+function updatePaymentMethod(id, { name, detail, badge, notes }) {
+  const result = db.prepare("UPDATE payment_methods SET name = ?, detail = ?, badge = ?, notes = ? WHERE id = ?")
+    .run(name, detail || "", badge || "", notes || "", id);
+  if (result.changes === 0) throw Object.assign(new Error("Payment method not found."), { code: 404 });
+  return { id, name, detail, badge, notes };
+}
+
+function deletePaymentMethod(id) {
+  const result = db.prepare("DELETE FROM payment_methods WHERE id = ?").run(id);
+  if (result.changes === 0) throw Object.assign(new Error("Payment method not found."), { code: 404 });
+}
+
+module.exports = {
+  readAll, appendOne, updateOne, deleteOne, createSheet, listSheets, deleteSheet,totalTransactionAmout,
+  listCategories, createCategory, updateCategory, deleteCategory,
+  listPeople, createPerson, updatePerson, deletePerson, 
+  listPaymentMethods, createPaymentMethod, updatePaymentMethod, deletePaymentMethod,
+};

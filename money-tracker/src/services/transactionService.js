@@ -18,6 +18,12 @@ async function handleResponse(res) {
   return json.data ?? json;
 }
 
+// ── Get all transaction amount ────────────────────────────────────────
+export async function getTransactionAmount() {
+  const res = await fetch(`${BASE_URL}/`);
+  return handleResponse(res);
+}
+
 // ── Save a new transaction ────────────────────────────────────────
 export async function saveTransaction(filename,formData) {
 

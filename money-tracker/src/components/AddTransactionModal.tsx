@@ -1,18 +1,12 @@
 import { useState, useEffect } from "react";
-import { saveTransaction,updateTransaction } from "../services/transactionService";
-
+import { saveTransaction, updateTransaction } from "../services/transactionService";
+import { listCategories, listPeople, listPaymentMethods } from "../services/settingsService";
 
 const AVATAR_COLORS = ["#C4894B", "#7BA7BC", "#A8C5A0", "#B5838D", "#9B8672"];
 
 function getInitials(name) {
   if (name === "You") return "ME";
   return name.split(" ").map((n) => n[0]).join("");
-}
-
-async function loadTxt(filename) {
-  const res = await fetch(`/data/${filename}`);
-  const text = await res.text();
-  return text.split("\n").map((l) => l.trim()).filter(Boolean);
 }
 
 const inputBase = { background: "#F0EBE3", border: "1.5px solid transparent" };
@@ -33,26 +27,22 @@ export default function AddTransactionModal({ sheetName, onClose, onSaved, initi
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const [amount, setAmount] = useState(initialData?.amount ?? ""); // CHANGES
-  const [date, setDate] = useState(initialData?.date ?? ""); // CHANGES
-  const [description, setDescription] = useState(initialData?.description ?? ""); // CHANGES
-  const [category, setCategory] = useState(initialData?.category ?? ""); // CHANGES
-  const [method, setMethod] = useState(initialData?.method ?? ""); // CHANGES
-   const [people, setPeople] = useState(() => {
+  const [amount, setAmount] = useState(initialData?.amount ?? "");
+  const [date, setDate] = useState(initialData?.date ?? "");
+  const [description, setDescription] = useState(initialData?.description ?? "");
+  const [category, setCategory] = useState(initialData?.category ?? "");
+  const [method, setMethod] = useState(initialData?.method ?? "");
+  const [people, setPeople] = useState(() => {
     const raw = initialData?.participants ?? initialData?.people ?? [];
- 
     let arr;
     if (Array.isArray(raw)) {
-      // Shape 1 — already an array
       arr = raw;
     } else if (typeof raw === "string" && raw.includes("|")) {
-      // Shape 2 — pipe-separated "Name:owes|Name:owes"
       arr = raw.split("|").filter(Boolean).map((p) => {
         const [name, owes] = p.split(":");
         return { name: name?.trim(), owes: owes?.trim() || "0" };
       });
     } else if (typeof raw === "string" && raw.includes("(₹")) {
-      // Shape 3 — display string "You ($4), Jane Smith ($240)"
       arr = raw.split(",").map((chunk) => {
         const match = chunk.trim().match(/^(.+?)\s*\(\$([0-9.]+)\)$/);
         if (match) return { name: match[1].trim(), owes: match[2] };
@@ -61,90 +51,76 @@ export default function AddTransactionModal({ sheetName, onClose, onSaved, initi
     } else {
       arr = [];
     }
- 
-    return arr.map((p) => ({
-      ...p,
-      isYou: p.name === CURRENT_USER || p.isYou === true,
-    }));
+    return arr.map((p) => ({ ...p, isYou: p.name === CURRENT_USER || p.isYou === true }));
   });
-  const [taxReturnable, setTaxReturnable] = useState(initialData?.taxReturnable ?? true); 
-  const [notes, setNotes] = useState(initialData?.notes ?? ""); // CHANGES
+  const [taxReturnable, setTaxReturnable] = useState(initialData?.taxReturnable ?? true);
+  const [notes, setNotes] = useState(initialData?.notes ?? "");
   const [showParticipantDropdown, setShowParticipantDropdown] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-
-useEffect(() => {
-  if (!initialData) return;
-
-  setAmount(initialData.amount ?? "");
-  setDate(initialData.date ?? "");
-  setDescription(initialData.description ?? "");
-  setCategory(initialData.category ?? "");
-  setMethod(initialData.method ?? "");
-  setTaxReturnable(initialData.taxReturnable ?? true);
-  setNotes(initialData.notes ?? "");
-
-  const raw = initialData?.participants ?? initialData?.people ?? [];
-
-  let arr = [];
-
-  if (Array.isArray(raw)) {
-    arr = raw;
-  } else if (typeof raw === "string" && raw.includes("|")) {
-    arr = raw.split("|").filter(Boolean).map((p) => {
-      const [name, owes] = p.split(":");
-
-      return {
-        name: name?.trim(),
-        owes: owes?.trim() || "0",
-      };
-    });
-  }
-
-  setPeople(
-    arr.map((p) => ({
-      ...p,
-      isYou: p.name === CURRENT_USER || p.isYou === true,
-    }))
-  );
-}, [initialData]);
-
-
+  // ── Sync initialData changes ──────────────────────────────────
   useEffect(() => {
-    Promise.all([
-      loadTxt("categories.txt"),
-      loadTxt("methods.txt"),
-      loadTxt("participants.txt"),
-    ])
-      .then(([cats, meths, parts]) => {
-        setCategories(cats);
-        setMethods(meths);
-        setAllParticipants(parts);
-        if (meths.length > 0 && !initialData?.method) setMethod(meths[0]);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error(err);
-        setError("Failed to load data. Make sure the /data/*.txt files are served correctly.");
-        setLoading(false);
+    if (!initialData) return;
+    setAmount(initialData.amount ?? "");
+    setDate(initialData.date ?? "");
+    setDescription(initialData.description ?? "");
+    setCategory(initialData.category ?? "");
+    setMethod(initialData.method ?? "");
+    setTaxReturnable(initialData.taxReturnable ?? true);
+    setNotes(initialData.notes ?? "");
+    const raw = initialData?.participants ?? initialData?.people ?? [];
+    let arr = [];
+    if (Array.isArray(raw)) {
+      arr = raw;
+    } else if (typeof raw === "string" && raw.includes("|")) {
+      arr = raw.split("|").filter(Boolean).map((p) => {
+        const [name, owes] = p.split(":");
+        return { name: name?.trim(), owes: owes?.trim() || "0" };
       });
+    }
+    setPeople(arr.map((p) => ({ ...p, isYou: p.name === CURRENT_USER || p.isYou === true })));
+  }, [initialData]);
+
+  // ── Load categories, payment methods, people from API ─────────
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const [cats, meths, parts] = await Promise.all([
+          listCategories(),
+          listPaymentMethods(),
+          listPeople(),
+        ]);
+        setCategories(cats);       // [{id, name}, ...]
+        setMethods(meths);         // [{id, name, detail}, ...]
+        setAllParticipants(parts); // [{id, name, role}, ...]
+
+        // Set default method if not editing
+        if (meths.length > 0 && !initialData?.method) {
+          setMethod(meths[0].name);
+        }
+        setLoading(false);
+      } catch (err) {
+        console.error(err);
+        // setError("Failed to load settings data. Make sure the backend is running.");
+        setLoading(false);
+      }
+    }
+    fetchData();
   }, []);
 
-  // ── Derived amounts ──────────────────────────────────────────
+  // ── Derived amounts ───────────────────────────────────────────
   const totalAmount = parseFloat(amount) || 0;
-  // const participantTotal = people.reduce((sum, p) => sum + (parseFloat(p.owes) || 0), 0);
   const participantTotal = people.reduce((sum, p) => {
     const v = parseFloat(p.owes) || 0;
-    return sum + (v > 0 ? v : -1*v);
+    return sum + (v > 0 ? v : -1 * v);
   }, 0);
   const remaining = parseFloat((totalAmount - participantTotal).toFixed(2));
   const isOver = participantTotal > totalAmount && totalAmount > 0;
   const isBalanced = totalAmount > 0 && people.length > 0 && Math.abs(remaining) < 0.01;
 
-  
-  // ── Handlers ─────────────────────────────────────────────────
+  // ── Handlers ──────────────────────────────────────────────────
   const removeParticipant = (name) => setPeople(people.filter((p) => p.name !== name));
 
   const addParticipant = (value) => {
@@ -157,16 +133,11 @@ useEffect(() => {
     setShowParticipantDropdown(false);
   };
 
-
-
   const updateOwes = (name, raw) => {
-    
     const clean = raw
-      .replace(/[^0-9.\-]/g, "")           // strip everything except digits, dot, minus
-      .replace(/(?!^)-/g, "")              // only allow minus at the very start
-      .replace(/(\..*?)\..*/g, "$1");       // only one decimal point
-
-    
+      .replace(/[^0-9.\-]/g, "")
+      .replace(/(?!^)-/g, "")
+      .replace(/(\..*?)\..*/g, "$1");
     setPeople(people.map((p) => (p.name === name ? { ...p, owes: clean } : p)));
   };
 
@@ -174,36 +145,34 @@ useEffect(() => {
     setSaveError(null);
     setSaving(true);
     try {
-      
       const payload = { date, description, amount, category, method, taxReturnable, people, notes };
       let result;
-      if (initialData?.id) {      
-        result = await updateTransaction(sheetName,initialData.id, payload);
+      if (initialData?.id) {
+        result = await updateTransaction(sheetName, initialData.id, payload);
         const returnAmount = result?.people
           .filter((p) => p.name !== "You")
-          .reduce(
-            (sum, p) => sum + (parseFloat(p.owes) || 0),
-            0
-          );
-        result= {...result,returnAmount}
-        
+          .reduce((sum, p) => sum + (parseFloat(p.owes) || 0), 0);
+        result = { ...result, returnAmount };
         onSaved?.(result);
       } else {
-        result = await saveTransaction(sheetName,payload);
+        result = await saveTransaction(sheetName, payload);
         onSaved?.(result);
       }
       setSaveSuccess(true);
       setTimeout(() => onClose?.(), 1200);
     } catch (err) {
       setSaveError(err.message);
-
     } finally {
       setSaving(false);
     }
   };
 
+  // Participants available to add — filter out already-added ones
+  // allParticipants is [{id, name, role}] — extract names for comparison
   const youAlreadyAdded = people.some((p) => p.isYou);
-  const available = allParticipants.filter((p) => !people.find((pp) => pp.name === p));
+  const available = allParticipants.filter(
+    (p) => p.name !== currentUser && !people.find((pp) => pp.name === p.name)
+  );
   const hasOptions = !youAlreadyAdded || available.length > 0;
 
   // ── Loading / error screens ───────────────────────────────────
@@ -246,13 +215,11 @@ useEffect(() => {
       >
         <div className="px-10 py-9">
 
-          {/* Close */}
           <button onClick={onClose}
             className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center rounded-full text-[#8B7355] hover:bg-[#EDE8DF] hover:text-[#5C4A32] transition-colors text-lg leading-none">
             ✕
           </button>
 
-          {/* Header */}
           <h2 className="text-2xl font-bold text-[#2C1F0E] tracking-tight" style={{ fontFamily: "Georgia, serif" }}>
             Record Transaction
           </h2>
@@ -267,10 +234,7 @@ useEffect(() => {
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#C4894B] font-medium text-sm pointer-events-none">₹</span>
                 <input
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  value={amount}
+                  type="text" inputMode="decimal" placeholder="0.00" value={amount}
                   onChange={(e) => {
                     const v = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*?)\..*/g, "$1");
                     setAmount(v);
@@ -280,7 +244,6 @@ useEffect(() => {
                 />
               </div>
             </div>
-
             <div className="flex flex-col gap-1.5 flex-1">
               <label className="text-[10px] font-semibold tracking-widest uppercase text-[#9B8672]">Date</label>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
@@ -298,7 +261,7 @@ useEffect(() => {
               style={inputBase} />
           </div>
 
-          {/* Category + Method */}
+         
           <div className="flex gap-4 mt-5">
             <div className="flex flex-col gap-1.5 flex-1">
               <label className="text-[10px] font-semibold tracking-widest uppercase text-[#9B8672]">Category</label>
@@ -306,7 +269,9 @@ useEffect(() => {
                 className="w-full px-4 py-3 rounded-xl text-sm text-[#2C1F0E] outline-none appearance-none cursor-pointer transition-all focus:ring-2 focus:ring-[#C4894B]/20"
                 style={selectStyle}>
                 <option value="">Select category</option>
-                {categories.map((c) => <option key={c}>{c}</option>)}
+                {categories.map((c) => (
+                  <option key={c.id} value={c.name}>{c.name}</option>
+                ))}
               </select>
             </div>
             <div className="flex flex-col gap-1.5 flex-1">
@@ -314,12 +279,15 @@ useEffect(() => {
               <select value={method} onChange={(e) => setMethod(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl text-sm text-[#2C1F0E] outline-none appearance-none cursor-pointer transition-all focus:ring-2 focus:ring-[#C4894B]/20"
                 style={selectStyle}>
-                {methods.map((m) => <option key={m}>{m}</option>)}
+                <option value="">Select method</option>
+                {methods.map((m) => (
+                  <option key={m.id} value={m.name}>{m.name}</option>
+                ))}
               </select>
             </div>
           </div>
 
-          {/* ── People Involved ── */}
+          {/* People Involved — now from DB */}
           <div className="flex flex-col gap-3 mt-5">
             <label className="text-[10px] font-semibold tracking-widest uppercase text-[#9B8672]">People Involved</label>
 
@@ -327,55 +295,38 @@ useEffect(() => {
               <div className="flex flex-col gap-2">
                 {people.map((person, i) => {
                   const owesNum = parseFloat(person.owes) || 0;
-                  // Per-row highlight: red if this person's share pushes total over
-                  const rowOver = isOver;
-
                   return (
                     <div key={person.name}
                       className="flex items-center gap-2 rounded-xl px-3 py-2.5 transition-all"
                       style={{ background: "#F0EBE3" }}>
-
-                      {/* Avatar */}
                       <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
                         style={{ background: person.isYou ? "#8B5E2E" : AVATAR_COLORS[(i + 1) % AVATAR_COLORS.length] }}>
                         {getInitials(person.name)}
                       </div>
-
-                      {/* Name */}
                       <span className="text-[13px] font-medium text-[#3D2B1A] flex-1 min-w-0 truncate">
                         {person.name}
                         {person.isYou && (
                           <span className="ml-1.5 text-[10px] font-semibold tracking-wide uppercase text-[#C4894B]">you</span>
                         )}
                       </span>
-
-                             <span className="text-[10px] font-medium flex-shrink-0 transition-colors"
+                      <span className="text-[10px] font-medium flex-shrink-0 transition-colors"
                         style={{ color: owesNum < 0 ? "#2563eb" : "#9B8672" }}>
                         {owesNum < 0 ? "you owe" : "owes"}
                       </span>
- 
-                      {/* Amount input — CHANGES: negative value = blue styling, minus sign allowed */}
                       <div className="relative flex-shrink-0">
                         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] pointer-events-none"
-                          style={{ color: owesNum < 0 ? "#2563eb" : rowOver ? "#dc2626" : "#9B8672" }}>₹</span>
+                          style={{ color: owesNum < 0 ? "#2563eb" : isOver ? "#dc2626" : "#9B8672" }}>₹</span>
                         <input
-                          type="text"
-                          inputMode="decimal"
-                          placeholder="0.00"
-                          value={person.owes}
+                          type="text" inputMode="decimal" placeholder="0.00" value={person.owes}
                           onChange={(e) => updateOwes(person.name, e.target.value)}
                           className="w-24 pl-5 pr-2 py-1.5 rounded-lg text-[12px] placeholder-[#C9B9A8] outline-none transition-all focus:ring-2"
                           style={{
-                            background: owesNum < 0 ? "#eff6ff" : rowOver ? "#fef2f2" : "#E8E0D4",
-                            border: `1.5px solid ${owesNum < 0 ? "#93c5fd" : rowOver ? "#fca5a5" : "transparent"}`,
+                            background: owesNum < 0 ? "#eff6ff" : isOver ? "#fef2f2" : "#E8E0D4",
+                            border: `1.5px solid ${owesNum < 0 ? "#93c5fd" : isOver ? "#fca5a5" : "transparent"}`,
                             color: owesNum < 0 ? "#1d4ed8" : "#2C1F0E",
                           }}
                         />
                       </div>
-
-                      
-
-                      {/* Remove */}
                       <button onClick={() => removeParticipant(person.name)}
                         className="text-[#9B8672] hover:text-[#C4894B] text-lg leading-none transition-colors flex-shrink-0 ml-0.5">
                         ×
@@ -384,7 +335,7 @@ useEffect(() => {
                   );
                 })}
 
-                {/* ── Balance summary bar ── */}
+                {/* Balance bar */}
                 {totalAmount > 0 && people.length > 0 && (
                   <div className="rounded-xl px-4 py-3 flex items-center justify-between mt-1"
                     style={{
@@ -392,34 +343,26 @@ useEffect(() => {
                       border: `1.5px solid ${isBalanced ? "#86efac" : isOver ? "#fca5a5" : "#fde68a"}`,
                     }}>
                     <div className="flex items-center gap-2">
-                      <span className="text-base">
-                        {isBalanced ? "✅" : isOver ? "⚠️" : "⏳"}
-                      </span>
+                      <span className="text-base">{isBalanced ? "✅" : isOver ? "⚠️" : "⏳"}</span>
                       <span className="text-[12px] font-semibold"
                         style={{ color: isBalanced ? "#16a34a" : isOver ? "#dc2626" : "#92400e" }}>
-                        {isBalanced
-                          ? "Amounts balanced perfectly"
-                          : isOver
-                          ? `Over by ₹${(participantTotal - totalAmount).toFixed(2)}`
+                        {isBalanced ? "Amounts balanced perfectly"
+                          : isOver ? `Over by ₹${(participantTotal - totalAmount).toFixed(2)}`
                           : `₹${remaining.toFixed(2)} still unassigned`}
                       </span>
                     </div>
                     <div className="text-right">
                       <div className="text-[11px] text-[#9B8672]">
-                        <span style={{ color: isOver ? "#dc2626" : "#3D2B1A" }}
-                          className="font-semibold">${participantTotal.toFixed(2)}</span>
+                        <span style={{ color: isOver ? "#dc2626" : "#3D2B1A" }} className="font-semibold">₹{participantTotal.toFixed(2)}</span>
                         <span className="mx-1">/</span>
-                        <span>${totalAmount.toFixed(2)}</span>
+                        <span>₹{totalAmount.toFixed(2)}</span>
                       </div>
-                      {/* Mini progress bar */}
                       <div className="w-28 h-1.5 rounded-full mt-1 overflow-hidden" style={{ background: "#E8E0D4" }}>
-                        <div
-                          className="h-full rounded-full transition-all duration-300"
+                        <div className="h-full rounded-full transition-all duration-300"
                           style={{
                             width: `${Math.min((participantTotal / totalAmount) * 100, 100)}%`,
                             background: isBalanced ? "#22c55e" : isOver ? "#ef4444" : "#f59e0b",
-                          }}
-                        />
+                          }} />
                       </div>
                     </div>
                   </div>
@@ -427,7 +370,7 @@ useEffect(() => {
               </div>
             )}
 
-            {/* Add Participant button */}
+            {/* Add Participant dropdown — options from DB people */}
             <div className="relative self-start">
               {showParticipantDropdown ? (
                 <select autoFocus defaultValue=""
@@ -439,7 +382,9 @@ useEffect(() => {
                   {!youAlreadyAdded && (
                     <option value="__you__">⭐ {currentUser} (You)</option>
                   )}
-                  {available.map((p) => <option key={p} value={p}>{p}</option>)}
+                  {available.map((p) => (
+                    <option key={p.id} value={p.name}>{p.name}</option>
+                  ))}
                 </select>
               ) : (
                 <button
@@ -453,7 +398,7 @@ useEffect(() => {
             </div>
           </div>
 
-          {/* Extra Notes */}
+          {/* Notes */}
           <div className="flex flex-col gap-1.5 mt-5">
             <label className="text-[10px] font-semibold tracking-widest uppercase text-[#9B8672]">Extra Notes</label>
             <textarea placeholder="Additional context for auditing..." value={notes}
@@ -462,7 +407,6 @@ useEffect(() => {
               style={inputBase} />
           </div>
 
-          {/* Save error */}
           {saveError && (
             <div className="mt-4 px-4 py-2.5 rounded-xl text-[12px] text-red-700 font-medium"
               style={{ background: "#fef2f2", border: "1.5px solid #fca5a5" }}>
@@ -470,7 +414,6 @@ useEffect(() => {
             </div>
           )}
 
-          {/* Actions */}
           <div className="flex gap-3 mt-4">
             <button onClick={onClose}
               className="flex-1 py-3.5 rounded-xl text-sm font-medium text-[#6B5744] hover:bg-[#EDE8DF] transition-colors"

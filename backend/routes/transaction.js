@@ -1,6 +1,6 @@
 const express = require("express");
 const { randomUUID } = require("crypto");
-const { readAll, appendOne, updateOne, deleteOne,transactionAmout } = require("../utils/db");
+const { readAll, appendOne, updateOne, deleteOne,totalTransactionAmout } = require("../utils/db");
 
 const router = express.Router();
 
@@ -25,12 +25,19 @@ function transactionData(transaction) {
   };
 }
 
+router.get("/", (_req, res) => {
+  try {
+    const data = totalTransactionAmout()
+    res.json({data});
+  } catch (err) {
+    res.status(500).json({ error: "Failed to get data" });
+  }
+});
+
 // ── GET /api/transactions/:filename ──────────────────────────────
 router.get("/:filename", (req, res) => {
   try {
     const rows = readAll(req.params.filename);
-    
-    transactionAmout()
     const transactions = rows.map(transactionData)
       .sort((a, b) => new Date(a.date) - new Date(b.date));
     res.json({ success: true, data: transactions });

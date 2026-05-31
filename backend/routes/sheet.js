@@ -1,5 +1,5 @@
 const express = require("express");
-const { createSheet, listSheets, deleteSheet } = require("../utils/db");
+const { createSheet, listSheets, deleteSheet, totalTransactionAmout } = require("../utils/db");
 
 const router = express.Router();
 
@@ -17,7 +17,8 @@ router.post("/", (req, res) => {
 router.get("/", (_req, res) => {
   try {
     const sheets = listSheets();
-    res.json({ sheets, total: sheets.length });
+    const data = totalTransactionAmout()
+    res.json({ sheets, amount_data: data, total: sheets.length });
   } catch (err) {
     res.status(500).json({ error: "Failed to list sheets." });
   }
