@@ -7,23 +7,28 @@ db.pragma("foreign_keys = ON");
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS sheets (
-    id TEXT PRIMARY KEY,
-    name TEXT UNIQUE NOT NULL,
-    createdAt TEXT NOT NULL
+    id            TEXT PRIMARY KEY,
+    name          TEXT UNIQUE NOT NULL,
+    type          TEXT DEFAULT 'monthly',
+    budgetEnabled INTEGER DEFAULT 0,
+    totalBudget   REAL DEFAULT 0,
+    startDate     TEXT,
+    endDate       TEXT,
+    createdAt     TEXT NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS transactions (
-    id TEXT PRIMARY KEY,
-    sheetId TEXT NOT NULL,
-    createdAt TEXT NOT NULL,
-    date TEXT NOT NULL,
-    description TEXT DEFAULT '',
-    amount REAL NOT NULL,
-    category TEXT DEFAULT '',
-    method TEXT DEFAULT '',
-    taxReturnable INTEGER DEFAULT 0,
-    notes TEXT DEFAULT '',
-    categoryId TEXT,
+    id              TEXT PRIMARY KEY,
+    sheetId         TEXT NOT NULL,
+    createdAt       TEXT NOT NULL,
+    date            TEXT NOT NULL,
+    description     TEXT DEFAULT '',
+    amount          REAL NOT NULL,
+    category        TEXT DEFAULT '',
+    method          TEXT DEFAULT '',
+    taxReturnable   INTEGER DEFAULT 0,
+    notes           TEXT DEFAULT '',
+    categoryId      TEXT,
     paymentMethodId TEXT,
     FOREIGN KEY (sheetId) REFERENCES sheets(id) ON DELETE CASCADE,
     FOREIGN KEY (categoryId) REFERENCES categories(id) ON DELETE SET NULL,
@@ -31,35 +36,47 @@ db.exec(`
   );
 
   CREATE TABLE IF NOT EXISTS participants (
-    id TEXT PRIMARY KEY,
+    id            TEXT PRIMARY KEY,
     transactionId TEXT NOT NULL,
-    name TEXT NOT NULL,
-    owes REAL NOT NULL DEFAULT 0,
-    personId TEXT,
+    name          TEXT NOT NULL,
+    owes          REAL NOT NULL  DEFAULT 0,
+    personId      TEXT,
     FOREIGN KEY (transactionId) REFERENCES transactions(id) ON DELETE CASCADE,
     FOREIGN KEY (personId) REFERENCES people(id) ON DELETE SET NULL
   );
 
   CREATE TABLE IF NOT EXISTS categories (
-    id TEXT PRIMARY KEY,
-    name TEXT UNIQUE NOT NULL,
+    id        TEXT PRIMARY KEY,
+    name      TEXT UNIQUE NOT NULL,
     createdAt TEXT NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS people (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    role TEXT DEFAULT 'Contributor',
+    id        TEXT PRIMARY KEY,
+    name      TEXT NOT NULL,
+    role      TEXT DEFAULT 'Contributor',
     createdAt TEXT NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS payment_methods (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    detail TEXT DEFAULT '',
-    badge TEXT DEFAULT '',
-    notes TEXT DEFAULT '',
+    id        TEXT PRIMARY KEY,
+    name      TEXT NOT NULL,
+    detail    TEXT DEFAULT '',
+    badge     TEXT DEFAULT '',
+    notes     TEXT DEFAULT '',
     createdAt TEXT NOT NULL
+  );
+
+
+  CREATE TABLE IF NOT EXISTS budget_categories (
+    id          TEXT PRIMARY KEY,
+    sheetId     TEXT NOT NULL,
+    categoryId  TEXT,
+    name        TEXT NOT NULL,
+    limitAmount REAL NOT NULL DEFAULT 0,
+    createdAt   TEXT NOT NULL,
+    FOREIGN KEY (sheetId) REFERENCES sheets(id) ON DELETE CASCADE,
+    FOREIGN KEY (categoryId) REFERENCES categories(id) ON DELETE SET NULL
   );
 `);
 
@@ -184,15 +201,53 @@ function deleteOne(id) {
 
 // ── Sheet functions ───────────────────────────────────────────────
 
-function createSheet(name) {
+function createSheet(name, options = {}) {
+
   const existing = db.prepare("SELECT id FROM sheets WHERE name = ?").get(name);
   if (existing) throw Object.assign(new Error(`Sheet "${name}" already exists.`), { code: 409 });
   const id = randomUUID();
-  db.prepare("INSERT INTO sheets (id, name, createdAt) VALUES (?, ?, ?)").run(
-    id, name, new Date().toISOString()
+  db.prepare(`
+    INSERT INTO sheets (id, name, type, budgetEnabled, totalBudget, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(
+    id, name,
+    options.type || "monthly",
+    options.budgetEnabled || 0,
+    options.totalBudget || 0,
+    new Date().toISOString()
   );
-  return { id, name };
+  return { id, name, type: options.type || "monthly" };
 }
+
+function createBudgetCategories(sheetId, categories) {
+  const insert = db.prepare(`
+    INSERT INTO budget_categories (id, sheetId, categoryId, name, limitAmount, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  const insertAll = db.transaction((cats) => {
+    for (const cat of cats) {
+      insert.run(
+        randomUUID(), sheetId,
+        cat.id || null,      // categoryId — foreign key
+        cat.name,            // name — kept as readable fallback - TODO:w1
+        parseFloat(cat.limit) || 0,
+        new Date().toISOString()
+      );
+    }
+  });
+  insertAll(categories);
+}
+
+function getBudgetCategories(sheetId) {
+  return db.prepare(`
+    SELECT bc.*
+    FROM budget_categories bc
+    LEFT JOIN categories c ON c.id = bc.categoryId
+    WHERE bc.sheetId = ?
+    ORDER BY bc.createdAt ASC
+  `).all(sheetId);
+}
+
 
 function listSheets() {
   return db.prepare("SELECT * FROM sheets ORDER BY createdAt ASC").all();
@@ -281,9 +336,14 @@ function deletePaymentMethod(id) {
   if (result.changes === 0) throw Object.assign(new Error("Payment method not found."), { code: 404 });
 }
 
+
+
 module.exports = {
-  readAll, appendOne, updateOne, deleteOne, createSheet, listSheets, deleteSheet,totalTransactionAmout,
+  readAll, appendOne, updateOne, deleteOne,
+  createSheet, listSheets, deleteSheet,
   listCategories, createCategory, updateCategory, deleteCategory,
-  listPeople, createPerson, updatePerson, deletePerson, 
+  listPeople, createPerson, updatePerson, deletePerson,
   listPaymentMethods, createPaymentMethod, updatePaymentMethod, deletePaymentMethod,
+  createBudgetCategories, getBudgetCategories,
+  totalTransactionAmout,
 };

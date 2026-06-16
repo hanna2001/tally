@@ -53,7 +53,7 @@ export default function CollectionCard({ sheet, onDeleted, onCancel }: Props) {
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); setConfirming(false); }}
-      onClick={() => { if (!isCreating && !confirming) navigate("/sheet", { state: { sheetName: sheet.name } }); }}
+      onClick={() => { if (!isCreating && !confirming) navigate("/sheet", { state: { sheetName: sheet.name ,sheetId:sheet.id} }); }}
       style={{
         background: "#fff",
         border: isCreating ? "2px solid #8C5A3C" : "1px solid #e8e2db",

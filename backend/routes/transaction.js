@@ -70,6 +70,10 @@ router.post("/:filename", (req, res) => {
           message: `Participant amounts (₹${participantTotal.toFixed(2)}) do not match total (₹${parseFloat(amount).toFixed(2)}).`,
         });
       }
+      people.forEach(p => {
+        if(!p.owes)
+            p.owes = 0;
+        })
     }
 
     const transaction = {
@@ -132,6 +136,10 @@ router.put("/:filename/:id", (req, res) => {
           message: `Participant amounts (₹${participantTotal.toFixed(2)}) do not match total (₹${parseFloat(amount).toFixed(2)}).`,
         });
       }
+      people.forEach(p => {
+        if(!p.owes)
+            p.owes = 0;
+      })
     }
 
     updateOne(id, { date, description, amount, category, method, taxReturnable, people, notes });

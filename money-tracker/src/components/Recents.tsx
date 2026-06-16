@@ -21,8 +21,8 @@ export default function Recents() {
     }
   }
 
-  const handleCreateSheet = async (name:string) => {
-    await createSheet(name);
+  const handleCreateSheet = async (data:{}) => {
+    await createSheet(data);
     fetchData();
   };
 
@@ -83,6 +83,7 @@ export default function Recents() {
 
           ))}
           <CreateCard onCreate={handleCreateSheet}/>
+          
         </div>
         
       </div>

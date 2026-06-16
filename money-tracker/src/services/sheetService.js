@@ -11,14 +11,14 @@ async function handleResponse(res) {
 }
 
 // ── Create a new sheet (new CSV file) ────────────────────────────
-export async function createSheet(name) {
-    
+export async function createSheet(data) {
+  
   const res = await fetch(`${BASE_URL}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(data),
   });
   return handleResponse(res);
 }
@@ -26,6 +26,12 @@ export async function createSheet(name) {
 // ── List all sheets ───────────────────────────────────────────────
 export async function listSheets() {
   const res = await fetch(`${BASE_URL}`);
+  return handleResponse(res);
+}
+
+// ── Get budget of a sheet ───────────────────────────────────────────────
+export async function getBudget(sheetID) {
+  const res = await fetch(`${BASE_URL}/${sheetID}/budget`);
   return handleResponse(res);
 }
 

@@ -317,7 +317,7 @@ export default function AddTransactionModal({ sheetName, onClose, onSaved, initi
                         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] pointer-events-none"
                           style={{ color: owesNum < 0 ? "#2563eb" : isOver ? "#dc2626" : "#9B8672" }}>₹</span>
                         <input
-                          type="text" inputMode="decimal" placeholder="0.00" value={person.owes}
+                          type="text" inputMode="decimal" defaultValue="0" value={person.owes||0}
                           onChange={(e) => updateOwes(person.name, e.target.value)}
                           className="w-24 pl-5 pr-2 py-1.5 rounded-lg text-[12px] placeholder-[#C9B9A8] outline-none transition-all focus:ring-2"
                           style={{

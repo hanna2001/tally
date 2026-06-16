@@ -36,7 +36,18 @@ export default function TransactionTable({sheetname,transactions,setTransactions
     <div className="px-10">
 
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-medium">RECENT ACTIVITY</h3>
+        <p
+        style={{
+          letterSpacing: "0.18em",
+          fontSize: 10.5,
+          color: "#9a8f84",
+          fontWeight: 500,
+          margin: "0 0 20px 0",
+          textTransform: "uppercase",
+        }}
+      >
+        Transactions
+      </p>
         <div className="text-sm text-gray-500 tracking-widest">
           <button
                     onClick={() => setModal(true)}
