@@ -30,6 +30,8 @@ export default function AddTransactionModal({ sheetName, onClose, onSaved, initi
   const [amount, setAmount] = useState(initialData?.amount ?? "");
   const [date, setDate] = useState(initialData?.date ?? "");
   const [description, setDescription] = useState(initialData?.description ?? "");
+  const [categoryId, setCategoryId] = useState(initialData?.categoryId ?? "");
+  const [methodId, setMethodId] = useState(initialData?.methodId ?? "");
   const [category, setCategory] = useState(initialData?.category ?? "");
   const [method, setMethod] = useState(initialData?.method ?? "");
   const [people, setPeople] = useState(() => {
@@ -67,7 +69,9 @@ export default function AddTransactionModal({ sheetName, onClose, onSaved, initi
     setDate(initialData.date ?? "");
     setDescription(initialData.description ?? "");
     setCategory(initialData.category ?? "");
+    setCategoryId(initialData.categoryId ?? "")
     setMethod(initialData.method ?? "");
+    setMethodId(initialData.methodId??"")
     setTaxReturnable(initialData.taxReturnable ?? true);
     setNotes(initialData.notes ?? "");
     const raw = initialData?.participants ?? initialData?.people ?? [];
@@ -96,7 +100,6 @@ export default function AddTransactionModal({ sheetName, onClose, onSaved, initi
         setMethods(meths);         // [{id, name, detail}, ...]
         setAllParticipants(parts); // [{id, name, role}, ...]
 
-        // Set default method if not editing
         if (meths.length > 0 && !initialData?.method) {
           setMethod(meths[0].name);
         }
@@ -145,7 +148,7 @@ export default function AddTransactionModal({ sheetName, onClose, onSaved, initi
     setSaveError(null);
     setSaving(true);
     try {
-      const payload = { date, description, amount, category, method, taxReturnable, people, notes };
+      const payload = {date, description, amount, category, categoryId, method, paymentMethodId: methodId, taxReturnable, people, notes };
       let result;
       if (initialData?.id) {
         result = await updateTransaction(sheetName, initialData.id, payload);
@@ -265,23 +268,35 @@ export default function AddTransactionModal({ sheetName, onClose, onSaved, initi
           <div className="flex gap-4 mt-5">
             <div className="flex flex-col gap-1.5 flex-1">
               <label className="text-[10px] font-semibold tracking-widest uppercase text-[#9B8672]">Category</label>
-              <select value={category} onChange={(e) => setCategory(e.target.value)}
+              <select
+                value={categoryId}
+                onChange={(e) => {
+                  const selected = categories.find(c => c.id === e.target.value);
+                  setCategoryId(e.target.value);
+                  setCategory(selected?.name ?? "");
+                }}
                 className="w-full px-4 py-3 rounded-xl text-sm text-[#2C1F0E] outline-none appearance-none cursor-pointer transition-all focus:ring-2 focus:ring-[#C4894B]/20"
                 style={selectStyle}>
                 <option value="">Select category</option>
                 {categories.map((c) => (
-                  <option key={c.id} value={c.name}>{c.name}</option>
+                  <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
             </div>
             <div className="flex flex-col gap-1.5 flex-1">
               <label className="text-[10px] font-semibold tracking-widest uppercase text-[#9B8672]">Method</label>
-              <select value={method} onChange={(e) => setMethod(e.target.value)}
+              <select
+                value={methodId}
+                onChange={(e) => {
+                  const selected = methods.find(m => m.id === e.target.value);
+                  setMethodId(e.target.value);
+                  setMethod(selected?.name ?? "");
+                }}
                 className="w-full px-4 py-3 rounded-xl text-sm text-[#2C1F0E] outline-none appearance-none cursor-pointer transition-all focus:ring-2 focus:ring-[#C4894B]/20"
                 style={selectStyle}>
-                <option value="">Select method</option>
+                  <option value="">Select method</option>
                 {methods.map((m) => (
-                  <option key={m.id} value={m.name}>{m.name}</option>
+                  <option key={m.id} value={m.id}>{m.name}</option>
                 ))}
               </select>
             </div>

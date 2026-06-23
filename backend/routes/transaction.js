@@ -8,7 +8,7 @@ function findReturn(participants) {
   if (!Array.isArray(participants)) return 0;
   return participants
     .filter(p => p.name !== "You")
-    .reduce((sum, p) => sum + (parseFloat(p.owes) > 0 ? parseFloat(p.owes) : 0), 0);
+    .reduce((sum, p) => sum + (parseFloat(p.owes)? parseFloat(p.owes) : 0), 0);
 }
 
 function transactionData(transaction) {
@@ -18,7 +18,9 @@ function transactionData(transaction) {
     description: transaction.description,
     amount: parseFloat(transaction.amount),
     category: transaction.category,
+    categoryId: transaction.categoryId,
     method: transaction.method,
+    methodId: transaction.paymentMethodId,
     people: transaction.participants || [],
     returnAmount: findReturn(transaction.participants),
     notes: transaction.notes,
@@ -52,8 +54,8 @@ router.get("/:filename", (req, res) => {
 router.post("/:filename", (req, res) => {
   try {
     const { filename } = req.params;
-    const { date, description, amount, category, method, taxReturnable, people, notes } = req.body;
-
+    const { date, description, amount, category, categoryId, method, paymentMethodId, taxReturnable, people, notes } = req.body;
+    
     if (!amount || isNaN(parseFloat(amount))) {
       return res.status(400).json({ success: false, message: "Invalid amount." });
     }
@@ -83,9 +85,11 @@ router.post("/:filename", (req, res) => {
       description: description || "",
       amount: parseFloat(amount).toFixed(2),
       category: category || "",
+      categoryId: categoryId || null,  
       method: method || "",
       taxReturnable: taxReturnable ? "yes" : "no",
       people: people || [],
+      paymentMethodId: paymentMethodId || null,
       notes: notes || "",
     };
 

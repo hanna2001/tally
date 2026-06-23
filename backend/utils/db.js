@@ -138,8 +138,8 @@ function appendOne(sheetName, transaction) {
 
   const insert = db.transaction(() => {
     db.prepare(`
-      INSERT INTO transactions (id, sheetId, createdAt, date, description, amount, category, method, taxReturnable, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO transactions (id, sheetId, createdAt, date, description, amount, category, method, taxReturnable, notes, categoryId, paymentMethodId)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       transaction.id,
       sheetId,
@@ -150,7 +150,9 @@ function appendOne(sheetName, transaction) {
       transaction.category || "",
       transaction.method || "",
       transaction.taxReturnable === "yes" ? 1 : 0,
-      transaction.notes || ""
+      transaction.notes || "",
+      transaction.categoryId || "",
+      transaction.paymentMethodId || ""
     );
 
     for (const p of (transaction.people || [])) {

@@ -207,10 +207,14 @@ export default function FinancialArchitecture({ transactions = [], budgetData = 
     [transactions]
   );
 
-  let returns = transactions.reduce((sum: number, t: { returnAmount: string; }) => sum + parseFloat(t.returnAmount), 0);
+  let returns = transactions
+    .filter((t: { people: any[]; }) => t.people?.find(p => p.name != "You"))
+    .filter((t: { returnAmount: string; }) => parseFloat(t.returnAmount)>0)
+    .reduce((sum: number, t: { returnAmount: string; }) => sum + parseFloat(t.returnAmount), 0);
 
   const noreturns = transactions
     .filter((t: { people: any[]; }) => t.people?.find(p => p.name === "N"))
+    .filter((t: { returnAmount: string; }) => parseFloat(t.returnAmount)>0)
     .reduce((sum: number, t: { returnAmount: string; }) => sum + (parseFloat(t.returnAmount) || 0), 0);
 
   const owes = transactions
