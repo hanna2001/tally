@@ -24,11 +24,17 @@ export async function getTransactionAmount() {
   return handleResponse(res);
 }
 
-// ── Save a new transaction ────────────────────────────────────────
-export async function saveTransaction(filename,formData) {
+export async function loadTransactions(sheetId, page = 1, limit = 100) {
+  const res = await fetch(`${BASE_URL}/${sheetId}?page=${page}&limit=${limit}`);
+  const json = await res.json();
+  if (!json.success) throw new Error(json.message);
+  return { data: json.data, pagination: json.pagination };
+}
 
+export async function saveTransaction(sheetId, formData) {
+  console.log(sheetId);
   
-  const res = await fetch(`${BASE_URL}/${filename}/`, {
+  const res = await fetch(`${BASE_URL}/${sheetId}/`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(formData),
@@ -36,16 +42,16 @@ export async function saveTransaction(filename,formData) {
   return handleResponse(res);
 }
 
-// ── Load all transactions ─────────────────────────────────────────
-export async function loadTransactions(filename) {
-  const res = await fetch(`${BASE_URL}/${filename}/`);
+export async function deleteTransaction(sheetId, id) {
+  const res = await fetch(`${BASE_URL}/${sheetId}/${id}`, { method: "DELETE" });
   return handleResponse(res);
 }
 
-// ── Delete a transaction by id ────────────────────────────────────
-export async function deleteTransaction(filename,id) {
-  const res = await fetch(`${BASE_URL}/${filename}/${id}`, {
-    method: "DELETE",
+export async function updateTransaction(sheetId, id, formData) {
+  const res = await fetch(`${BASE_URL}/${sheetId}/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(formData),
   });
   return handleResponse(res);
 }
@@ -56,11 +62,3 @@ export function exportToCsv() {
   window.open(`${BASE_URL}/export`, "_blank");
 }
 
-export async function updateTransaction(filename,id, formData) {
-  const res = await fetch(`${BASE_URL}/${filename}/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(formData),
-  });
-  return handleResponse(res);
-}

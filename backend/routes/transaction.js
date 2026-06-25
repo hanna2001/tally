@@ -1,6 +1,6 @@
 const express = require("express");
 const { randomUUID } = require("crypto");
-const { readAll, appendOne, updateOne, deleteOne,totalTransactionAmout } = require("../utils/db");
+const { readAll, appendOne, readOne, updateOne, deleteOne, totalTransactionAmout } = require("../utils/db");
 
 const router = express.Router();
 
@@ -36,13 +36,18 @@ router.get("/", (_req, res) => {
   }
 });
 
-// ── GET /api/transactions/:filename ──────────────────────────────
-router.get("/:filename", (req, res) => {
+// ── GET /api/transactions/:sheetId ──────────────────────────────
+router.get("/:sheetId", (req, res) => {
   try {
-    const rows = readAll(req.params.filename);
-    const transactions = rows.map(transactionData)
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
-    res.json({ success: true, data: transactions });
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, parseInt(req.query.limit) || 100);
+
+    const result = readAll(req.params.sheetId, page, limit);
+    res.json({
+      success: true,
+      data: result.data.map(transactionData),
+      pagination: result.pagination,
+    });
   } catch (err) {
     res.status(err.code || 500).json({ success: false, message: err.message });
   }
@@ -50,10 +55,10 @@ router.get("/:filename", (req, res) => {
 
 
 
-// ── POST /api/transactions/:filename ─────────────────────────────
-router.post("/:filename", (req, res) => {
+// ── POST /api/transactions/:sheetId ─────────────────────────────
+router.post("/:sheetId", (req, res) => {
   try {
-    const { filename } = req.params;
+    const { sheetId } = req.params;
     const { date, description, amount, category, categoryId, method, paymentMethodId, taxReturnable, people, notes } = req.body;
     
     if (!amount || isNaN(parseFloat(amount))) {
@@ -93,23 +98,17 @@ router.post("/:filename", (req, res) => {
       notes: notes || "",
     };
 
-    appendOne(filename, transaction);
+    appendOne(sheetId, transaction);
 
-    res.json({
-      success: true,
-      data: {
-        ...transactionData(transaction),
-        people: people || [],
-        returnAmount: findReturn(people || []),
-      },
-    });
+    res.json({ success: true, data: transactionData(transaction) });
   } catch (err) {
-    res.status(err.code || 500).json({ success: false, message: err.message });
+    const status = typeof err.code === "number" ? err.code : 500;
+    res.status(status).json({ success: false, message: err.message });
   }
 });
 
-// ── DELETE /api/transactions/:filename/:id ────────────────────────
-router.delete("/:filename/:id", (req, res) => {
+// ── DELETE /api/transactions/:sheetId/:id ────────────────────────
+router.delete("/:sheetId/:id", (req, res) => {
   try {
     deleteOne(req.params.id);
     res.json({ success: true, message: "Transaction deleted." });
@@ -118,8 +117,8 @@ router.delete("/:filename/:id", (req, res) => {
   }
 });
 
-// ── PUT /api/transactions/:filename/:id ───────────────────────────
-router.put("/:filename/:id", (req, res) => {
+// ── PUT /api/transactions/:sheetId/:id ───────────────────────────
+router.put("/:sheetId/:id", (req, res) => {
   try {
     const { id } = req.params;
     const { date, description, amount, category, method, taxReturnable, people, notes } = req.body;
@@ -140,15 +139,12 @@ router.put("/:filename/:id", (req, res) => {
           message: `Participant amounts (₹${participantTotal.toFixed(2)}) do not match total (₹${parseFloat(amount).toFixed(2)}).`,
         });
       }
-      people.forEach(p => {
-        if(!p.owes)
-            p.owes = 0;
-      })
+      people.forEach(p => { if (!p.owes) p.owes = 0; });
     }
 
     updateOne(id, { date, description, amount, category, method, taxReturnable, people, notes });
 
-    const updated = readAll(req.params.filename).find(t => t.id === id);
+    const updated = readOne(id);
     res.json({ success: true, data: transactionData(updated) });
   } catch (err) {
     res.status(err.code || 500).json({ success: false, message: err.message });

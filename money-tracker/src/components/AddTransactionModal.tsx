@@ -19,8 +19,7 @@ const selectStyle = {
 };
 
 const CURRENT_USER = "You";
-
-export default function AddTransactionModal({ sheetName, onClose, onSaved, initialData = null, currentUser = CURRENT_USER }) {
+export default function AddTransactionModal({ sheetName, sheetId, onClose, onSaved, initialData = null, currentUser = CURRENT_USER }) {
   const [categories, setCategories] = useState([]);
   const [methods, setMethods] = useState([]);
   const [allParticipants, setAllParticipants] = useState([]);
@@ -151,14 +150,14 @@ export default function AddTransactionModal({ sheetName, onClose, onSaved, initi
       const payload = {date, description, amount, category, categoryId, method, paymentMethodId: methodId, taxReturnable, people, notes };
       let result;
       if (initialData?.id) {
-        result = await updateTransaction(sheetName, initialData.id, payload);
+        result = await updateTransaction(sheetId, initialData.id, payload);
         const returnAmount = result?.people
           .filter((p) => p.name !== "You")
           .reduce((sum, p) => sum + (parseFloat(p.owes) || 0), 0);
         result = { ...result, returnAmount };
         onSaved?.(result);
       } else {
-        result = await saveTransaction(sheetName, payload);
+        result = await saveTransaction(sheetId, payload);
         onSaved?.(result);
       }
       setSaveSuccess(true);

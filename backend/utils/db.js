@@ -94,18 +94,43 @@ function getParticipants(transactionId) {
 
 // ── Transaction functions ─────────────────────────────────────────
 
-function readAll(sheetName) {
-  const sheetId = getSheetId(sheetName);
-  const transactions = db.prepare(`
-    SELECT * FROM transactions WHERE sheetId = ? ORDER BY date ASC
-  `).all(sheetId);
 
-  return transactions.map(t => ({
-    ...t,
-    amount: t.amount,
-    participants: getParticipants(t.id),  // array of {name, owes} directly
-  }));
+function readOne(id) {
+  const t = db.prepare("SELECT * FROM transactions WHERE id = ?").get(id);
+  if (!t) throw Object.assign(new Error("Transaction not found."), { code: 404 });
+  return { ...t, participants: getParticipants(t.id) };
 }
+
+
+function readAll(sheetId, page = 1, limit = 100) {
+  const offset = (page - 1) * limit;
+  const transactions = db.prepare(`
+    SELECT * FROM transactions
+    WHERE sheetId = ?
+    ORDER BY date DESC, id DESC
+    LIMIT ? OFFSET ?
+  `).all(sheetId, limit, offset);
+
+  const { total } = db.prepare(`
+    SELECT COUNT(*) as total FROM transactions WHERE sheetId = ?
+  `).get(sheetId);
+
+  return {
+    data: transactions.map(t => ({
+      ...t,
+      participants: getParticipants(t.id),
+    })),
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page * limit < total,
+      hasPrevPage: page > 1,
+    }
+  };
+}
+
 
 function totalTransactionAmout() {
   const total_amount = db.prepare(`
@@ -133,39 +158,31 @@ function totalTransactionAmout() {
   };
 }
 
-function appendOne(sheetName, transaction) {
-  const sheetId = getSheetId(sheetName);
-
+function appendOne(sheetId, transaction) {
+  console.log(transaction);
+  console.log("sheetId:", sheetId);
   const insert = db.transaction(() => {
     db.prepare(`
       INSERT INTO transactions (id, sheetId, createdAt, date, description, amount, category, method, taxReturnable, notes, categoryId, paymentMethodId)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      transaction.id,
-      sheetId,
-      transaction.createdAt,
-      transaction.date,
-      transaction.description || "",
-      parseFloat(transaction.amount),
-      transaction.category || "",
-      transaction.method || "",
-      transaction.taxReturnable === "yes" ? 1 : 0,
-      transaction.notes || "",
-      transaction.categoryId || "",
-      transaction.paymentMethodId || ""
+      transaction.id, sheetId, transaction.createdAt,
+      transaction.date, transaction.description || "",
+      parseFloat(transaction.amount), transaction.category || "",
+      transaction.method || "", transaction.taxReturnable === "yes" ? 1 : 0,
+      transaction.notes || "", transaction.categoryId || null,
+      transaction.paymentMethodId || null
     );
-
     for (const p of (transaction.people || [])) {
-      db.prepare(`
-        INSERT INTO participants (id, transactionId, name, owes) VALUES (?, ?, ?, ?)
-      `).run(randomUUID(), transaction.id, p.name, parseFloat(p.owes));
+      db.prepare(`INSERT INTO participants (id, transactionId, name, owes) VALUES (?, ?, ?, ?)`)
+        .run(randomUUID(), transaction.id, p.name, parseFloat(p.owes));
     }
   });
-
   insert();
 }
 
 function updateOne(id, transaction) {
+  
   const update = db.transaction(() => {
     db.prepare(`
       UPDATE transactions SET
@@ -341,7 +358,7 @@ function deletePaymentMethod(id) {
 
 
 module.exports = {
-  readAll, appendOne, updateOne, deleteOne,
+  readAll, appendOne, updateOne, deleteOne, readOne,
   createSheet, listSheets, deleteSheet,
   listCategories, createCategory, updateCategory, deleteCategory,
   listPeople, createPerson, updatePerson, deletePerson,

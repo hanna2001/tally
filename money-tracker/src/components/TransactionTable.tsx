@@ -2,23 +2,23 @@ import { useState,useEffect } from "react";
 import { deleteTransaction } from "../services/transactionService";
 import RecordTransaction from "./AddTransactionModal"; // CHANGES: import modal
 
-export default function TransactionTable({sheetname,transactions,setTransactions,setModal}) {
+export default function TransactionTable({ sheetname, sheetId, transactions, setTransactions, setModal }) {
 
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
   const handleDelete = async (id) => {
-  if (!window.confirm("Delete this transaction?")) return;
-  try {
-    setDeletingId(id);
-    await deleteTransaction(sheetname, id);
-    setTransactions((prev) => prev.filter((t) => String(t.id) !== String(id)));
-  } catch (err) {
-    alert("Failed to delete: " + err.message);
-  } finally {
-    setDeletingId(null);
-  }
-};
+    if (!window.confirm("Delete this transaction?")) return;
+    try {
+      setDeletingId(id);
+      await deleteTransaction(sheetId, id);
+      setTransactions((prev) => prev.filter((t) => String(t.id) !== String(id)));
+    } catch (err) {
+      alert("Failed to delete: " + err.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
  
   useEffect(() => {
   if (!editingTransaction) {
@@ -129,6 +129,7 @@ export default function TransactionTable({sheetname,transactions,setTransactions
       {editingTransaction && (
         <RecordTransaction
           sheetName={sheetname}
+          sheetId={sheetId}  
           initialData={editingTransaction}
           onClose={() => setEditingTransaction(null)}
           onSaved={(updated) => {
