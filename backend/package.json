@@ -5,7 +5,10 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "db:migrate": "dbmate up",
+    "db:rollback": "dbmate down",
+    "db:status": "dbmate status"
   },
   "dependencies": {
     "better-sqlite3": "^12.10.0",
