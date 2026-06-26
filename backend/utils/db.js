@@ -19,7 +19,6 @@ function getParticipants(transactionId) {
 
 // ── Transaction functions ─────────────────────────────────────────
 
-
 function readOne(id) {
   const t = db.prepare("SELECT * FROM transactions WHERE id = ?").get(id);
   if (!t) throw Object.assign(new Error("Transaction not found."), { code: 404 });
@@ -56,6 +55,70 @@ function readAll(sheetId, page = 1, limit = 100) {
   };
 }
 
+function getBudgetSummary(sheetId) {
+  const sheet = db.prepare(`SELECT totalBudget, budgetEnabled FROM sheets WHERE id = ?`).get(sheetId);
+
+  const { totalSpent } = db.prepare(`
+    SELECT COALESCE(SUM(amount), 0) as totalSpent FROM transactions WHERE sheetId = ?
+  `).get(sheetId);
+
+  const categories = db.prepare(`
+    SELECT
+      bc.id,
+      bc.name,
+      bc.categoryId,
+      bc.limitAmount,
+      COALESCE(SUM(t.amount), 0) as spent
+    FROM budget_categories bc
+    LEFT JOIN transactions t
+      ON t.sheetId = bc.sheetId
+      AND (t.categoryId = bc.categoryId OR t.category = bc.name)
+    WHERE bc.sheetId = ?
+    GROUP BY bc.id
+    ORDER BY spent DESC
+  `).all(sheetId);
+
+  const transactionCategories = db.prepare(`
+    SELECT
+      category as name,
+      COALESCE(SUM(amount), 0) as spent
+    FROM transactions
+    WHERE sheetId = ?
+      AND category != ''
+    GROUP BY category
+    ORDER BY spent DESC
+  `).all(sheetId);
+
+  const { returns } = db.prepare(`
+    SELECT COALESCE(SUM(p.owes), 0) as returns
+    FROM participants p
+    JOIN transactions t ON p.transactionId = t.id
+    WHERE t.sheetId = ? AND p.name != 'You' AND p.owes > 0
+  `).get(sheetId);
+
+  const { owes } = db.prepare(`
+    SELECT COALESCE(SUM(p.owes), 0) as owes
+    FROM participants p
+    JOIN transactions t ON p.transactionId = t.id
+    WHERE t.sheetId = ? AND p.name != 'You' AND p.owes < 0
+  `).get(sheetId);
+
+  const totalBudget = sheet?.totalBudget || 0;
+
+  return {
+    totalSpent,
+    totalBudget,
+    budgetEnabled: sheet?.budgetEnabled === 1,
+    remaining: totalBudget - totalSpent,
+    returns,
+    owes,
+    categories: categories.map(c => ({
+      ...c,
+      pct: c.limitAmount > 0 ? (c.spent / c.limitAmount) * 100 : 0,
+    })),
+    transactionCategories,
+  };
+}
 
 function totalTransactionAmout() {
   const total_amount = db.prepare(`
@@ -283,7 +346,7 @@ function deletePaymentMethod(id) {
 
 
 module.exports = {
-  readAll, appendOne, updateOne, deleteOne, readOne,
+  readAll, appendOne, updateOne, deleteOne, readOne, getBudgetSummary,
   createSheet, listSheets, deleteSheet,
   listCategories, createCategory, updateCategory, deleteCategory,
   listPeople, createPerson, updatePerson, deletePerson,

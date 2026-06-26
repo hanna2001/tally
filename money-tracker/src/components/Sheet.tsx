@@ -1,12 +1,12 @@
 
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { loadTransactions } from "../services/transactionService"; 
+import { loadTransactions,getBudgetSummary } from "../services/transactionService"; 
 import { getBudget } from "../services/sheetService"; 
 import TransactionTable from "./TransactionTable";
 import PaymentMethodOverview from "./PaymentMethodOverview";
 import AddTransactionModal from "./AddTransactionModal";
-import FinancialArchitecture from "./FinancialArchitecture";
+import FinancialArchitecture from "./FinancialArchitecture/";
 
 
 export default function Sheet() {
@@ -15,8 +15,7 @@ export default function Sheet() {
   const sheetId = location.state.sheetId || {};
   const [showModal, setShowModal] = useState(false);
   const [transactions, setTransactions] = useState([]);
-  const [budgetData, setBudgetData] = useState([]);
-
+  const [summary, setSummary] = useState(null); 
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, hasNextPage: false, hasPrevPage: false });
   const [page, setPage] = useState(1);
 
@@ -32,21 +31,23 @@ export default function Sheet() {
         
   }
 
-  async function fetchBudgetData(sheetId) {
+  async function fetchSummary() {
     try {
-      const res = await getBudget(sheetId);
-      setBudgetData(res);
-    } catch (error) {}
+      const res = await getBudgetSummary(sheetId);
+      setSummary(res);
+    } catch (err) {
+      console.error(err);
+    }
   }
 
   useEffect(() => {
     fetchTransactions(page);
-    fetchBudgetData(sheetId);
+    fetchSummary()
   }, [page]);  
 
   return (
     <>
-      <FinancialArchitecture transactions={transactions} budgetData={budgetData} totalBudget={36000} />
+      <FinancialArchitecture summary={summary} />
       <TransactionTable
         sheetname={sheetName}
         sheetId={sheetId}  
@@ -68,7 +69,10 @@ export default function Sheet() {
           sheetId={sheetId}
           sheetName={sheetName}
           onClose={() => setShowModal(false)}
-          onSaved={() => fetchTransactions(page)}
+          onSaved={() => {
+            fetchTransactions(page);
+            fetchSummary();
+          }}
         />
       )}
     </>

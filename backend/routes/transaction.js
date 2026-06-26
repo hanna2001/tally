@@ -1,6 +1,6 @@
 const express = require("express");
 const { randomUUID } = require("crypto");
-const { readAll, appendOne, readOne, updateOne, deleteOne, totalTransactionAmout } = require("../utils/db");
+const { readAll, appendOne, readOne, updateOne, deleteOne, totalTransactionAmout, getBudgetSummary } = require("../utils/db");
 
 const router = express.Router();
 
@@ -148,6 +148,17 @@ router.put("/:sheetId/:id", (req, res) => {
     res.json({ success: true, data: transactionData(updated) });
   } catch (err) {
     res.status(err.code || 500).json({ success: false, message: err.message });
+  }
+});
+
+// ── GET /api/transactions/:sheetId/budget-summary ────────────────
+router.get("/:sheetId/budget-summary", (req, res) => {
+  try {
+    const summary = getBudgetSummary(req.params.sheetId);
+    res.json({ success: true, data: summary });
+  } catch (err) {
+    const status = typeof err.code === "number" ? err.code : 500;
+    res.status(status).json({ success: false, message: err.message });
   }
 });
 

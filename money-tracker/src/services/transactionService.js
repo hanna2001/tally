@@ -56,6 +56,13 @@ export async function updateTransaction(sheetId, id, formData) {
   return handleResponse(res);
 }
 
+export async function getBudgetSummary(sheetId) {
+  const res = await fetch(`${BASE_URL}/${sheetId}/budget-summary`);
+  const json = await res.json();
+  if (!json.success) throw new Error(json.message);
+  return json.data;
+}
+
 // ── Download CSV export ───────────────────────────────────────────
 export function exportToCsv() {
   // Opens the export endpoint — browser handles the download prompt
