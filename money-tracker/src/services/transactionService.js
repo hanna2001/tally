@@ -63,6 +63,15 @@ export async function getBudgetSummary(sheetId) {
   return json.data;
 }
 
+export async function togglePaid(sheetId, transactionId, participantId, paid) {
+  const res = await fetch(`${BASE_URL}/${sheetId}/${transactionId}/participants/${participantId}/paid`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paid }),
+  });
+  return handleResponse(res);
+}
+
 // ── Download CSV export ───────────────────────────────────────────
 export function exportToCsv() {
   // Opens the export endpoint — browser handles the download prompt

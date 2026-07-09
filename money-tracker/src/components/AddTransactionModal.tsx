@@ -5,7 +5,6 @@ import { listCategories, listPeople, listPaymentMethods } from "../services/sett
 const AVATAR_COLORS = ["#C4894B", "#7BA7BC", "#A8C5A0", "#B5838D", "#9B8672"];
 
 function getInitials(name) {
-  if (name === "You") return "ME";
   return name.split(" ").map((n) => n[0]).join("");
 }
 
@@ -18,8 +17,7 @@ const selectStyle = {
   backgroundPosition: "right 14px center",
 };
 
-const CURRENT_USER = "You";
-export default function AddTransactionModal({ sheetName, sheetId, onClose, onSaved, initialData = null, currentUser = CURRENT_USER }) {
+export default function AddTransactionModal({ sheetName, sheetId, onClose, onSaved, initialData = null }) {
   const [categories, setCategories] = useState([]);
   const [methods, setMethods] = useState([]);
   const [allParticipants, setAllParticipants] = useState([]);
@@ -27,6 +25,7 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
   const [error, setError] = useState(null);
 
   const [amount, setAmount] = useState(initialData?.amount ?? "");
+  const [personal, setPersonal] = useState(initialData?.personal ?? "");
   const [date, setDate] = useState(initialData?.date ?? "");
   const [description, setDescription] = useState(initialData?.description ?? "");
   const [categoryId, setCategoryId] = useState(initialData?.categoryId ?? "");
@@ -35,7 +34,7 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
   const [method, setMethod] = useState(initialData?.method ?? "");
   const [people, setPeople] = useState(() => {
     const raw = initialData?.participants ?? initialData?.people ?? [];
-    let arr;
+    let arr = [];
     if (Array.isArray(raw)) {
       arr = raw;
     } else if (typeof raw === "string" && raw.includes("|")) {
@@ -43,16 +42,8 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
         const [name, owes] = p.split(":");
         return { name: name?.trim(), owes: owes?.trim() || "0" };
       });
-    } else if (typeof raw === "string" && raw.includes("(₹")) {
-      arr = raw.split(",").map((chunk) => {
-        const match = chunk.trim().match(/^(.+?)\s*\(\$([0-9.]+)\)$/);
-        if (match) return { name: match[1].trim(), owes: match[2] };
-        return { name: chunk.trim(), owes: "0" };
-      });
-    } else {
-      arr = [];
     }
-    return arr.map((p) => ({ ...p, isYou: p.name === CURRENT_USER || p.isYou === true }));
+    return arr.filter(p => p.name !== "You");
   });
   const [taxReturnable, setTaxReturnable] = useState(initialData?.taxReturnable ?? true);
   const [notes, setNotes] = useState(initialData?.notes ?? "");
@@ -65,12 +56,13 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
   useEffect(() => {
     if (!initialData) return;
     setAmount(initialData.amount ?? "");
+    setPersonal(initialData.personal ?? "");
     setDate(initialData.date ?? "");
     setDescription(initialData.description ?? "");
     setCategory(initialData.category ?? "");
-    setCategoryId(initialData.categoryId ?? "")
+    setCategoryId(initialData.categoryId ?? "");
     setMethod(initialData.method ?? "");
-    setMethodId(initialData.methodId??"")
+    setMethodId(initialData.methodId ?? "");
     setTaxReturnable(initialData.taxReturnable ?? true);
     setNotes(initialData.notes ?? "");
     const raw = initialData?.participants ?? initialData?.people ?? [];
@@ -83,7 +75,7 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
         return { name: name?.trim(), owes: owes?.trim() || "0" };
       });
     }
-    setPeople(arr.map((p) => ({ ...p, isYou: p.name === CURRENT_USER || p.isYou === true })));
+    setPeople(arr.filter(p => p.name !== "You"));
   }, [initialData]);
 
   // ── Load categories, payment methods, people from API ─────────
@@ -95,17 +87,15 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
           listPaymentMethods(),
           listPeople(),
         ]);
-        setCategories(cats);       // [{id, name}, ...]
-        setMethods(meths);         // [{id, name, detail}, ...]
-        setAllParticipants(parts); // [{id, name, role}, ...]
-
+        setCategories(cats);
+        setMethods(meths);
+        setAllParticipants(parts);
         if (meths.length > 0 && !initialData?.method) {
           setMethod(meths[0].name);
         }
         setLoading(false);
       } catch (err) {
         console.error(err);
-        // setError("Failed to load settings data. Make sure the backend is running.");
         setLoading(false);
       }
     }
@@ -118,19 +108,20 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
     const v = parseFloat(p.owes) || 0;
     return sum + (v > 0 ? v : -1 * v);
   }, 0);
-  const remaining = parseFloat((totalAmount - participantTotal).toFixed(2));
-  const isOver = participantTotal > totalAmount && totalAmount > 0;
-  const isBalanced = totalAmount > 0 && people.length > 0 && Math.abs(remaining) < 0.01;
+  const personalAmount = parseFloat(personal) || 0;
+  const remaining = parseFloat((personalAmount + participantTotal - totalAmount).toFixed(2));
+  const isOver = remaining > 0;
+  const isBalanced = totalAmount > 0 && people.length > 0 && 
+    !!personal &&
+    Math.abs(remaining) < 0.01;
 
   // ── Handlers ──────────────────────────────────────────────────
   const removeParticipant = (name) => setPeople(people.filter((p) => p.name !== name));
 
   const addParticipant = (value) => {
     if (!value) return;
-    const isYou = value === "__you__";
-    const displayName = isYou ? currentUser : value;
-    if (!people.find((p) => p.name === displayName)) {
-      setPeople((prev) => [...prev, { name: displayName, isYou, owes: "" }]);
+    if (!people.find((p) => p.name === value)) {
+      setPeople((prev) => [...prev, { name: value, owes: "" }]);
     }
     setShowParticipantDropdown(false);
   };
@@ -147,14 +138,17 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
     setSaveError(null);
     setSaving(true);
     try {
-      const payload = {date, description, amount, category, categoryId, method, paymentMethodId: methodId, taxReturnable, people, notes };
+      const others = people.filter(p => p.name !== "You");
+      const payload = {
+        date, description, amount, category, categoryId,
+        method, paymentMethodId: methodId, taxReturnable, notes,
+        people: others,
+        personal: others.length > 0 ? parseFloat(personal) : parseFloat(amount),
+      };
+
       let result;
       if (initialData?.id) {
         result = await updateTransaction(sheetId, initialData.id, payload);
-        const returnAmount = result?.people
-          .filter((p) => p.name !== "You")
-          .reduce((sum, p) => sum + (parseFloat(p.owes) || 0), 0);
-        result = { ...result, returnAmount };
         onSaved?.(result);
       } else {
         result = await saveTransaction(sheetId, payload);
@@ -169,13 +163,10 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
     }
   };
 
-  // Participants available to add — filter out already-added ones
-  // allParticipants is [{id, name, role}] — extract names for comparison
-  const youAlreadyAdded = people.some((p) => p.isYou);
   const available = allParticipants.filter(
-    (p) => p.name !== currentUser && !people.find((pp) => pp.name === p.name)
+    (p) => !people.find((pp) => pp.name === p.name)
   );
-  const hasOptions = !youAlreadyAdded || available.length > 0;
+  const hasOptions = available.length > 0;
 
   // ── Loading / error screens ───────────────────────────────────
   if (loading) {
@@ -203,8 +194,6 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
       </div>
     );
   }
-
-  // ── Render ────────────────────────────────────────────────────
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -232,7 +221,7 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
           {/* Amount + Date */}
           <div className="flex gap-4">
             <div className="flex flex-col gap-1.5 flex-1">
-              <label className="text-[10px] font-semibold tracking-widest uppercase text-[#9B8672]">Amount</label>
+              <label className="text-[10px] font-semibold tracking-widest uppercase text-[#9B8672]">Total Amount</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#C4894B] font-medium text-sm pointer-events-none">₹</span>
                 <input
@@ -263,7 +252,7 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
               style={inputBase} />
           </div>
 
-         
+          {/* Category + Method */}
           <div className="flex gap-4 mt-5">
             <div className="flex flex-col gap-1.5 flex-1">
               <label className="text-[10px] font-semibold tracking-widest uppercase text-[#9B8672]">Category</label>
@@ -293,7 +282,7 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
                 }}
                 className="w-full px-4 py-3 rounded-xl text-sm text-[#2C1F0E] outline-none appearance-none cursor-pointer transition-all focus:ring-2 focus:ring-[#C4894B]/20"
                 style={selectStyle}>
-                  <option value="">Select method</option>
+                <option value="">Select method</option>
                 {methods.map((m) => (
                   <option key={m.id} value={m.id}>{m.name}</option>
                 ))}
@@ -301,7 +290,7 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
             </div>
           </div>
 
-          {/* People Involved — now from DB */}
+          {/* People Involved */}
           <div className="flex flex-col gap-3 mt-5">
             <label className="text-[10px] font-semibold tracking-widest uppercase text-[#9B8672]">People Involved</label>
 
@@ -314,14 +303,11 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
                       className="flex items-center gap-2 rounded-xl px-3 py-2.5 transition-all"
                       style={{ background: "#F0EBE3" }}>
                       <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
-                        style={{ background: person.isYou ? "#8B5E2E" : AVATAR_COLORS[(i + 1) % AVATAR_COLORS.length] }}>
+                        style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
                         {getInitials(person.name)}
                       </div>
                       <span className="text-[13px] font-medium text-[#3D2B1A] flex-1 min-w-0 truncate">
                         {person.name}
-                        {person.isYou && (
-                          <span className="ml-1.5 text-[10px] font-semibold tracking-wide uppercase text-[#C4894B]">you</span>
-                        )}
                       </span>
                       <span className="text-[10px] font-medium flex-shrink-0 transition-colors"
                         style={{ color: owesNum < 0 ? "#2563eb" : "#9B8672" }}>
@@ -331,7 +317,7 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
                         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] pointer-events-none"
                           style={{ color: owesNum < 0 ? "#2563eb" : isOver ? "#dc2626" : "#9B8672" }}>₹</span>
                         <input
-                          type="text" inputMode="decimal" defaultValue="0" value={person.owes||0}
+                          type="text" inputMode="decimal" value={person.owes || 0}
                           onChange={(e) => updateOwes(person.name, e.target.value)}
                           className="w-24 pl-5 pr-2 py-1.5 rounded-lg text-[12px] placeholder-[#C9B9A8] outline-none transition-all focus:ring-2"
                           style={{
@@ -349,6 +335,28 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
                   );
                 })}
 
+                {/* Your share field */}
+                <div className="flex flex-col gap-1.5 mt-1">
+                  <label className="text-[10px] font-semibold tracking-widest uppercase text-[#9B8672]">Your Share</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#C4894B] font-medium text-sm pointer-events-none">₹</span>
+                    <input
+                      type="text" inputMode="decimal" placeholder="0.00" value={personal}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*?)\..*/g, "$1");
+                        setPersonal(v);
+                      }}
+                      className="w-full pl-7 pr-3 py-3 rounded-xl text-sm text-[#2C1F0E] placeholder-[#BFB4A6] outline-none transition-all focus:ring-2 focus:ring-[#C4894B]/20"
+                      style={inputBase}
+                    />
+                  </div>
+                  {personal && Math.abs(remaining) > 0.01 && (
+                    <p className="text-[11px] text-red-500">
+                      Your share (₹{personalAmount.toFixed(2)}) + others (₹{participantTotal.toFixed(2)}) must equal total (₹{totalAmount.toFixed(2)})
+                    </p>
+                  )}
+                </div>
+
                 {/* Balance bar */}
                 {totalAmount > 0 && people.length > 0 && (
                   <div className="rounded-xl px-4 py-3 flex items-center justify-between mt-1"
@@ -361,20 +369,22 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
                       <span className="text-[12px] font-semibold"
                         style={{ color: isBalanced ? "#16a34a" : isOver ? "#dc2626" : "#92400e" }}>
                         {isBalanced ? "Amounts balanced perfectly"
-                          : isOver ? `Over by ₹${(participantTotal - totalAmount).toFixed(2)}`
-                          : `₹${remaining.toFixed(2)} still unassigned`}
+                          : isOver ? `Over by ₹${Math.abs(remaining).toFixed(2)}`
+                          : `₹${Math.abs(remaining).toFixed(2)} still unassigned`}
                       </span>
                     </div>
                     <div className="text-right">
                       <div className="text-[11px] text-[#9B8672]">
-                        <span style={{ color: isOver ? "#dc2626" : "#3D2B1A" }} className="font-semibold">₹{participantTotal.toFixed(2)}</span>
+                        <span style={{ color: isOver ? "#dc2626" : "#3D2B1A" }} className="font-semibold">
+                          ₹{(personalAmount + participantTotal).toFixed(2)}
+                        </span>
                         <span className="mx-1">/</span>
                         <span>₹{totalAmount.toFixed(2)}</span>
                       </div>
                       <div className="w-28 h-1.5 rounded-full mt-1 overflow-hidden" style={{ background: "#E8E0D4" }}>
                         <div className="h-full rounded-full transition-all duration-300"
                           style={{
-                            width: `${Math.min((participantTotal / totalAmount) * 100, 100)}%`,
+                            width: `${Math.min(((personalAmount + participantTotal) / totalAmount) * 100, 100)}%`,
                             background: isBalanced ? "#22c55e" : isOver ? "#ef4444" : "#f59e0b",
                           }} />
                       </div>
@@ -384,7 +394,7 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
               </div>
             )}
 
-            {/* Add Participant dropdown — options from DB people */}
+            {/* Add Participant dropdown */}
             <div className="relative self-start">
               {showParticipantDropdown ? (
                 <select autoFocus defaultValue=""
@@ -393,9 +403,6 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
                   className="rounded-full px-3 py-1.5 text-[13px] text-[#3D2B1A] outline-none cursor-pointer"
                   style={{ background: "#F0EBE3", border: "1.5px dashed #C9B9A8" }}>
                   <option value="" disabled>Select person</option>
-                  {!youAlreadyAdded && (
-                    <option value="__you__">⭐ {currentUser} (You)</option>
-                  )}
                   {available.map((p) => (
                     <option key={p.id} value={p.name}>{p.name}</option>
                   ))}
@@ -436,7 +443,11 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
             </button>
             <button
               onClick={handleSave}
-              disabled={saving || saveSuccess || (people.length > 0 && totalAmount > 0 && !isBalanced)}
+              disabled={
+                saving || saveSuccess ||
+                (people.length > 0 && totalAmount > 0 && !isBalanced) ||
+                (people.length > 0 && (!personal || isNaN(parseFloat(personal))))
+              }
               className="flex-1 py-3.5 rounded-xl text-sm font-medium text-[#FFF8F0] transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 flex items-center justify-center gap-2"
               style={{ background: saveSuccess ? "#16a34a" : "#8B5E2E", boxShadow: "0 4px 16px rgba(139,94,46,0.28)" }}>
               {saving ? (

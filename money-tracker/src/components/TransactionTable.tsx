@@ -1,5 +1,5 @@
 import { useState,useEffect } from "react"; 
-import { deleteTransaction } from "../services/transactionService";
+import { deleteTransaction, togglePaid } from "../services/transactionService";
 import RecordTransaction from "./AddTransactionModal"; // CHANGES: import modal
 
 export default function TransactionTable({ sheetname, sheetId, transactions, setTransactions, setModal }) {
@@ -19,18 +19,51 @@ export default function TransactionTable({ sheetname, sheetId, transactions, set
       setDeletingId(null);
     }
   };
- 
+
+  const handleTogglePaid = async (transactionId, participantId, paid) => {
+    try {
+      const updated = await togglePaid(sheetId, transactionId, participantId, paid);
+      setTransactions((prev) =>
+        prev.map((t) => String(t.id) === String(transactionId) ? { ...t, ...updated } : t)
+      );
+    } catch (err) {
+      alert("Failed to update: " + err.message);
+    }
+  };
+  
   useEffect(() => {
   if (!editingTransaction) {
 
   }
 }, [transactions, editingTransaction]);
 
-  const formatPeople = (people)=>{
-  return people?.map(p => `${p.name} (₹${p.owes})`)
-          .join(", ")
+  const formatPeople = (people, transactionId) => {
+        console.log(people);
 
-  }
+  if (!people?.length) return null;
+  return (
+    <div className="flex flex-col gap-1">
+      {people.map((p) => (
+        
+        <div key={p.name} className="flex items-center gap-2">
+          <span style={{ color: p.paid ? "#16a34a" : "#9a8f84", textDecoration: p.paid ? "line-through" : "none" }}>
+            {p.name} (₹{p.owes})
+          </span>
+          <button
+            onClick={() => handleTogglePaid(transactionId, p.id, !p.paid)}
+            className="text-[10px] font-semibold tracking-wide uppercase px-1.5 py-0.5 rounded"
+            style={{
+              background: p.paid ? "#dcfce7" : "#f3f4f6",
+              color: p.paid ? "#16a34a" : "#9a8f84",
+            }}
+          >
+            {p.paid ? "Paid" : "Mark Paid"}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+};
 
     return (
     <div className="px-10">
@@ -84,14 +117,14 @@ export default function TransactionTable({ sheetname, sheetId, transactions, set
                     <td className="py-5 text-gray-500">{t.category}</td>
 
                     <td className="py-5 font-medium">
-                      ₹{t?.amount?.toLocaleString()}
+                      ₹{t?.personal?.toLocaleString()}
                     </td>
 
                     <td className="py-5">
                       ₹{t.returnAmount}
                     </td>
 
-                    <td className="p-5 text-gray-500">{formatPeople(t.people)}</td>
+                    <td className="p-5 text-gray-500">{formatPeople(t.people, t.id)}</td>
 
                     <td className="p-5 text-gray-500">{t.method}</td>
 
@@ -136,8 +169,8 @@ export default function TransactionTable({ sheetname, sheetId, transactions, set
             const normalized = {
               ...updated,
               amount: Number(updated.amount),
+              personal: Number(updated.personal),
               returnAmount: Number(updated.returnAmount || 0),
-
               people: (updated.people || []).map((p) => ({
                 ...p,
                 owes: Number(p.owes),
@@ -145,12 +178,9 @@ export default function TransactionTable({ sheetname, sheetId, transactions, set
             };
             setTransactions((prev) =>
               prev.map((t) =>
-                String(t.id) === String(normalized.id)
-                  ? { ...t, ...normalized }
-                  : t
+                String(t.id) === String(normalized.id) ? { ...t, ...normalized } : t
               )
             );
-
             setEditingTransaction(null);
           }}
         />

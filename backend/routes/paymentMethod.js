@@ -33,6 +33,7 @@ router.put("/:id", (req, res) => {
 });
 
 router.delete("/:id", (req, res) => {
+//  ux1 
   try {
     deletePaymentMethod(req.params.id);
     res.json({ success: true, message: "Payment method deleted." });

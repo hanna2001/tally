@@ -1,8 +1,13 @@
 CREATE TABLE sheets (
     id TEXT PRIMARY KEY,
     name TEXT UNIQUE NOT NULL,
-    createdAt TEXT NOT NULL
-  , type TEXT DEFAULT 'monthly', budgetEnabled INTEGER DEFAULT 0, totalBudget REAL DEFAULT 0, startDate TEXT, endDate TEXT);
+    createdAt TEXT NOT NULL, 
+    type TEXT DEFAULT 'monthly', 
+    budgetEnabled INTEGER DEFAULT 0, 
+    totalBudget REAL DEFAULT 0, 
+    startDate TEXT, 
+    endDate TEXT
+);
 CREATE TABLE categories (
     id TEXT PRIMARY KEY,
     name TEXT UNIQUE NOT NULL,
@@ -34,7 +39,7 @@ CREATE TABLE IF NOT EXISTS "transactions" (
     taxReturnable INTEGER DEFAULT 0,
     notes TEXT DEFAULT '',
     categoryId TEXT,
-    paymentMethodId TEXT,
+    paymentMethodId TEXT, personal REAL, effective_amount REAL,
     FOREIGN KEY (sheetId) REFERENCES sheets(id) ON DELETE CASCADE,
     FOREIGN KEY (categoryId) REFERENCES categories(id) ON DELETE SET NULL,
     FOREIGN KEY (paymentMethodId) REFERENCES payment_methods(id) ON DELETE SET NULL
@@ -44,7 +49,8 @@ CREATE TABLE IF NOT EXISTS "participants" (
     transactionId TEXT NOT NULL,
     name TEXT NOT NULL,
     owes REAL NOT NULL,
-    personId TEXT,
+    personId TEXT, 
+    paid INTEGER DEFAULT 0,
     FOREIGN KEY (transactionId) REFERENCES transactions(id) ON DELETE CASCADE,
     FOREIGN KEY (personId) REFERENCES people(id) ON DELETE SET NULL
   );
@@ -61,4 +67,5 @@ CREATE TABLE budget_categories (
 CREATE TABLE IF NOT EXISTS "schema_migrations" (version varchar(128) primary key);
 -- Dbmate schema migrations
 INSERT INTO "schema_migrations" (version) VALUES
-  ('20260625052634');
+  ('20260625052634'),
+  ('20260626031118');

@@ -13,8 +13,21 @@ function getSheetId(name) {
   return sheet.id;
 }
 
+
 function getParticipants(transactionId) {
-  return db.prepare("SELECT name, owes FROM participants WHERE transactionId = ?").all(transactionId);
+  return db.prepare("SELECT name, owes, paid FROM participants WHERE transactionId = ?").all(transactionId);
+}
+
+function updateEffectiveAmount(transactionId) {
+  const t = db.prepare("SELECT personal FROM transactions WHERE id = ?").get(transactionId);
+  const { unpaidOwes } = db.prepare(`
+    SELECT COALESCE(SUM(owes), 0) as unpaidOwes
+    FROM participants
+    WHERE transactionId = ? AND paid = 0
+  `).get(transactionId);
+
+  db.prepare("UPDATE transactions SET effective_amount = ? WHERE id = ?")
+    .run(t.personal + unpaidOwes, transactionId);
 }
 
 // ── Transaction functions ─────────────────────────────────────────
@@ -59,16 +72,13 @@ function getBudgetSummary(sheetId) {
   const sheet = db.prepare(`SELECT totalBudget, budgetEnabled FROM sheets WHERE id = ?`).get(sheetId);
 
   const { totalSpent } = db.prepare(`
-    SELECT COALESCE(SUM(amount), 0) as totalSpent FROM transactions WHERE sheetId = ?
+    SELECT COALESCE(SUM(effective_amount), 0) as totalSpent FROM transactions WHERE sheetId = ?
   `).get(sheetId);
 
   const categories = db.prepare(`
     SELECT
-      bc.id,
-      bc.name,
-      bc.categoryId,
-      bc.limitAmount,
-      COALESCE(SUM(t.amount), 0) as spent
+      bc.id, bc.name, bc.categoryId, bc.limitAmount,
+      COALESCE(SUM(t.effective_amount), 0) as spent
     FROM budget_categories bc
     LEFT JOIN transactions t
       ON t.sheetId = bc.sheetId
@@ -79,12 +89,9 @@ function getBudgetSummary(sheetId) {
   `).all(sheetId);
 
   const transactionCategories = db.prepare(`
-    SELECT
-      category as name,
-      COALESCE(SUM(amount), 0) as spent
+    SELECT category as name, COALESCE(SUM(effective_amount), 0) as spent
     FROM transactions
-    WHERE sheetId = ?
-      AND category != ''
+    WHERE sheetId = ? AND category != ''
     GROUP BY category
     ORDER BY spent DESC
   `).all(sheetId);
@@ -93,14 +100,14 @@ function getBudgetSummary(sheetId) {
     SELECT COALESCE(SUM(p.owes), 0) as returns
     FROM participants p
     JOIN transactions t ON p.transactionId = t.id
-    WHERE t.sheetId = ? AND p.name != 'You' AND p.owes > 0
+    WHERE t.sheetId = ? AND p.paid = 0 AND p.owes > 0
   `).get(sheetId);
 
   const { owes } = db.prepare(`
     SELECT COALESCE(SUM(p.owes), 0) as owes
     FROM participants p
     JOIN transactions t ON p.transactionId = t.id
-    WHERE t.sheetId = ? AND p.name != 'You' AND p.owes < 0
+    WHERE t.sheetId = ? AND p.owes < 0
   `).get(sheetId);
 
   const totalBudget = sheet?.totalBudget || 0;
@@ -147,40 +154,58 @@ function totalTransactionAmout() {
 }
 
 function appendOne(sheetId, transaction) {
-  console.log(transaction);
-  console.log("sheetId:", sheetId);
+  const personal = parseFloat(transaction.personal);
+  const people = (transaction.people || []).filter(p => p.name !== "You");
+  const unpaidOwes = people
+    .filter(p => !p.paid)
+    .reduce((sum, p) => sum + parseFloat(p.owes), 0);
+
   const insert = db.transaction(() => {
     db.prepare(`
-      INSERT INTO transactions (id, sheetId, createdAt, date, description, amount, category, method, taxReturnable, notes, categoryId, paymentMethodId)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO transactions 
+        (id, sheetId, createdAt, date, description, amount, personal, effective_amount, category, method, taxReturnable, notes, categoryId, paymentMethodId)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       transaction.id, sheetId, transaction.createdAt,
       transaction.date, transaction.description || "",
-      parseFloat(transaction.amount), transaction.category || "",
-      transaction.method || "", transaction.taxReturnable === "yes" ? 1 : 0,
-      transaction.notes || "", transaction.categoryId || null,
+      parseFloat(transaction.amount),
+      personal,
+      personal + unpaidOwes,
+      transaction.category || "",
+      transaction.method || "",
+      transaction.taxReturnable === "yes" ? 1 : 0,
+      transaction.notes || "",
+      transaction.categoryId || null,
       transaction.paymentMethodId || null
     );
-    for (const p of (transaction.people || [])) {
-      db.prepare(`INSERT INTO participants (id, transactionId, name, owes) VALUES (?, ?, ?, ?)`)
-        .run(randomUUID(), transaction.id, p.name, parseFloat(p.owes));
+
+    for (const p of people) {
+      db.prepare(`INSERT INTO participants (id, transactionId, name, owes, paid) VALUES (?, ?, ?, ?, ?)`)
+        .run(randomUUID(), transaction.id, p.name, parseFloat(p.owes), p.paid ? 1 : 0);
     }
   });
   insert();
 }
 
 function updateOne(id, transaction) {
-  
+  const personal = parseFloat(transaction.personal);
+  const people = (transaction.people || []).filter(p => p.name !== "You");
+  const unpaidOwes = people
+    .filter(p => !p.paid)
+    .reduce((sum, p) => sum + parseFloat(p.owes), 0);
+
   const update = db.transaction(() => {
     db.prepare(`
       UPDATE transactions SET
-        date = ?, description = ?, amount = ?, category = ?,
-        method = ?, taxReturnable = ?, notes = ?
+        date = ?, description = ?, amount = ?, personal = ?, effective_amount = ?,
+        category = ?, method = ?, taxReturnable = ?, notes = ?
       WHERE id = ?
     `).run(
       transaction.date,
       transaction.description || "",
       parseFloat(transaction.amount),
+      personal,
+      personal + unpaidOwes,
       transaction.category || "",
       transaction.method || "",
       transaction.taxReturnable === "yes" ? 1 : 0,
@@ -189,13 +214,11 @@ function updateOne(id, transaction) {
     );
 
     db.prepare("DELETE FROM participants WHERE transactionId = ?").run(id);
-    for (const p of (transaction.people || [])) {
-      db.prepare(`
-        INSERT INTO participants (id, transactionId, name, owes) VALUES (?, ?, ?, ?)
-      `).run(randomUUID(), id, p.name, parseFloat(p.owes));
+    for (const p of people) {
+      db.prepare(`INSERT INTO participants (id, transactionId, name, owes, paid) VALUES (?, ?, ?, ?, ?)`)
+        .run(randomUUID(), id, p.name, parseFloat(p.owes), p.paid ? 1 : 0);
     }
   });
-
   update();
 }
 
@@ -204,6 +227,11 @@ function deleteOne(id) {
   if (result.changes === 0) throw Object.assign(new Error("Transaction not found."), { code: 404 });
 }
 
+function togglePaid(participantId, paid) {
+  db.prepare("UPDATE participants SET paid = ? WHERE id = ?").run(paid ? 1 : 0, participantId);
+  const { transactionId } = db.prepare("SELECT transactionId FROM participants WHERE id = ?").get(participantId);
+  updateEffectiveAmount(transactionId);
+}
 
 
 // ── Sheet functions ───────────────────────────────────────────────
@@ -347,6 +375,7 @@ function deletePaymentMethod(id) {
 
 module.exports = {
   readAll, appendOne, updateOne, deleteOne, readOne, getBudgetSummary,
+  togglePaid,
   createSheet, listSheets, deleteSheet,
   listCategories, createCategory, updateCategory, deleteCategory,
   listPeople, createPerson, updatePerson, deletePerson,

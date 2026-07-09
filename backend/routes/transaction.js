@@ -1,28 +1,29 @@
 const express = require("express");
 const { randomUUID } = require("crypto");
-const { readAll, appendOne, readOne, updateOne, deleteOne, totalTransactionAmout, getBudgetSummary } = require("../utils/db");
+const { readAll, appendOne, readOne, updateOne, deleteOne, totalTransactionAmout, getBudgetSummary, togglePaid } = require("../utils/db");
 
 const router = express.Router();
 
-function findReturn(participants) {
-  if (!Array.isArray(participants)) return 0;
-  return participants
-    .filter(p => p.name !== "You")
-    .reduce((sum, p) => sum + (parseFloat(p.owes)? parseFloat(p.owes) : 0), 0);
-}
-
 function transactionData(transaction) {
+  const participants = transaction.participants || [];
+
+  const returnAmount = participants
+    .filter(p => !p.paid)
+    .reduce((sum, p) => sum + (parseFloat(p.owes) || 0), 0);
+
   return {
     id: transaction.id,
     date: transaction.date,
     description: transaction.description,
     amount: parseFloat(transaction.amount),
+    personal: parseFloat(transaction.personal),
+    effectiveAmount: parseFloat(transaction.effective_amount),
+    returnAmount,
     category: transaction.category,
     categoryId: transaction.categoryId,
     method: transaction.method,
     methodId: transaction.paymentMethodId,
-    people: transaction.participants || [],
-    returnAmount: findReturn(transaction.participants),
+    people: participants,
     notes: transaction.notes,
   };
 }
@@ -57,9 +58,11 @@ router.get("/:sheetId", (req, res) => {
 
 // ── POST /api/transactions/:sheetId ─────────────────────────────
 router.post("/:sheetId", (req, res) => {
+
   try {
     const { sheetId } = req.params;
-    const { date, description, amount, category, categoryId, method, paymentMethodId, taxReturnable, people, notes } = req.body;
+    const { date, description, amount, personal, category, categoryId, method, paymentMethodId, taxReturnable, people, notes } = req.body;
+    console.log(people);
     
     if (!amount || isNaN(parseFloat(amount))) {
       return res.status(400).json({ success: false, message: "Invalid amount." });
@@ -68,19 +71,20 @@ router.post("/:sheetId", (req, res) => {
       return res.status(400).json({ success: false, message: "Date is required." });
     }
 
-    if (Array.isArray(people) && people.length > 0) {
-      const participantTotal = people.reduce((sum, p) => sum + (parseFloat(p.owes) || 0), 0);
-      const diff = Math.abs(parseFloat(amount) - Math.abs(participantTotal));
+    const others = (people || []).filter(p => p.name !== "You");
+
+    if (others.length > 0) {
+      if (personal == null || isNaN(parseFloat(personal))) {
+        return res.status(400).json({ success: false, message: "Your share (personal) is required when participants are added." });
+      }
+      const othersTotal = others.reduce((sum, p) => sum + (parseFloat(p.owes) || 0), 0);
+      const diff = Math.abs(parseFloat(amount) - (parseFloat(personal) + othersTotal));
       if (diff > 0.01) {
         return res.status(400).json({
           success: false,
-          message: `Participant amounts (₹${participantTotal.toFixed(2)}) do not match total (₹${parseFloat(amount).toFixed(2)}).`,
+          message: `Your share (₹${parseFloat(personal).toFixed(2)}) + participants (₹${othersTotal.toFixed(2)}) must equal total (₹${parseFloat(amount).toFixed(2)}).`,
         });
       }
-      people.forEach(p => {
-        if(!p.owes)
-            p.owes = 0;
-        })
     }
 
     const transaction = {
@@ -88,19 +92,20 @@ router.post("/:sheetId", (req, res) => {
       createdAt: new Date().toISOString(),
       date,
       description: description || "",
-      amount: parseFloat(amount).toFixed(2),
+      amount: parseFloat(amount),
+      personal: others.length > 0 ? parseFloat(personal) : parseFloat(amount),
       category: category || "",
-      categoryId: categoryId || null,  
+      categoryId: categoryId || null,
       method: method || "",
       taxReturnable: taxReturnable ? "yes" : "no",
-      people: people || [],
+      people: others,
       paymentMethodId: paymentMethodId || null,
       notes: notes || "",
     };
 
     appendOne(sheetId, transaction);
-
-    res.json({ success: true, data: transactionData(transaction) });
+    const saved = readOne(transaction.id);
+    res.json({ success: true, data: transactionData(saved) });
   } catch (err) {
     const status = typeof err.code === "number" ? err.code : 500;
     res.status(status).json({ success: false, message: err.message });
@@ -121,7 +126,7 @@ router.delete("/:sheetId/:id", (req, res) => {
 router.put("/:sheetId/:id", (req, res) => {
   try {
     const { id } = req.params;
-    const { date, description, amount, category, method, taxReturnable, people, notes } = req.body;
+    const { date, description, amount, personal, category, categoryId, method, paymentMethodId, taxReturnable, people, notes } = req.body;
 
     if (!amount || isNaN(parseFloat(amount))) {
       return res.status(400).json({ success: false, message: "Invalid amount." });
@@ -130,24 +135,35 @@ router.put("/:sheetId/:id", (req, res) => {
       return res.status(400).json({ success: false, message: "Date is required." });
     }
 
-    if (Array.isArray(people) && people.length > 0) {
-      const participantTotal = people.reduce((sum, p) => sum + (parseFloat(p.owes) || 0), 0);
-      const diff = Math.abs(parseFloat(amount) - Math.abs(participantTotal));
+    const others = (people || []).filter(p => p.name !== "You");
+
+    if (others.length > 0) {
+      if (personal == null || isNaN(parseFloat(personal))) {
+        return res.status(400).json({ success: false, message: "Your share (personal) is required when participants are added." });
+      }
+      const othersTotal = others.reduce((sum, p) => sum + (parseFloat(p.owes) || 0), 0);
+      const diff = Math.abs(parseFloat(amount) - (parseFloat(personal) + othersTotal));
       if (diff > 0.01) {
         return res.status(400).json({
           success: false,
-          message: `Participant amounts (₹${participantTotal.toFixed(2)}) do not match total (₹${parseFloat(amount).toFixed(2)}).`,
+          message: `Your share (₹${parseFloat(personal).toFixed(2)}) + participants (₹${othersTotal.toFixed(2)}) must equal total (₹${parseFloat(amount).toFixed(2)}).`,
         });
       }
-      people.forEach(p => { if (!p.owes) p.owes = 0; });
     }
 
-    updateOne(id, { date, description, amount, category, method, taxReturnable, people, notes });
+    updateOne(id, {
+      date, description, amount: parseFloat(amount),
+      personal: others.length > 0 ? parseFloat(personal) : parseFloat(amount),
+      category, categoryId: categoryId || null,
+      method, paymentMethodId: paymentMethodId || null,
+      taxReturnable, people: others, notes,
+    });
 
     const updated = readOne(id);
     res.json({ success: true, data: transactionData(updated) });
   } catch (err) {
-    res.status(err.code || 500).json({ success: false, message: err.message });
+    const status = typeof err.code === "number" ? err.code : 500;
+    res.status(status).json({ success: false, message: err.message });
   }
 });
 
@@ -156,6 +172,20 @@ router.get("/:sheetId/budget-summary", (req, res) => {
   try {
     const summary = getBudgetSummary(req.params.sheetId);
     res.json({ success: true, data: summary });
+  } catch (err) {
+    const status = typeof err.code === "number" ? err.code : 500;
+    res.status(status).json({ success: false, message: err.message });
+  }
+});
+
+// ── PATCH /api/transactions/:sheetId/:transactionId/participants/:participantId/paid
+router.patch("/:sheetId/:transactionId/participants/:participantId/paid", (req, res) => {
+  try {
+    const { participantId } = req.params;
+    const { paid } = req.body;
+    togglePaid(participantId, paid);
+    const updated = readOne(req.params.transactionId);
+    res.json({ success: true, data: transactionData(updated) });
   } catch (err) {
     const status = typeof err.code === "number" ? err.code : 500;
     res.status(status).json({ success: false, message: err.message });
