@@ -6,7 +6,6 @@ export default function DashBoard() {
 
   return (
     <>
-        <Overview transactions={[]} label2={'OWED BY YOU'}  label3="OWES TO YOU"/>
         <Recents/>
         <Collections/>
     </>

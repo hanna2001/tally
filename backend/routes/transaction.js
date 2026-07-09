@@ -50,7 +50,8 @@ router.get("/:sheetId", (req, res) => {
       pagination: result.pagination,
     });
   } catch (err) {
-    res.status(err.code || 500).json({ success: false, message: err.message });
+     const status = typeof err.code === "number" ? err.code : 500;
+    res.status(status|| 500).json({ success: false, message: err.message });
   }
 });
 
@@ -62,22 +63,19 @@ router.post("/:sheetId", (req, res) => {
   try {
     const { sheetId } = req.params;
     const { date, description, amount, personal, category, categoryId, method, paymentMethodId, taxReturnable, people, notes } = req.body;
-    console.log(people);
-    
     if (!amount || isNaN(parseFloat(amount))) {
       return res.status(400).json({ success: false, message: "Invalid amount." });
     }
     if (!date) {
       return res.status(400).json({ success: false, message: "Date is required." });
     }
+    
 
-    const others = (people || []).filter(p => p.name !== "You");
-
-    if (others.length > 0) {
+    if (people.length > 0) {
       if (personal == null || isNaN(parseFloat(personal))) {
         return res.status(400).json({ success: false, message: "Your share (personal) is required when participants are added." });
       }
-      const othersTotal = others.reduce((sum, p) => sum + (parseFloat(p.owes) || 0), 0);
+      const othersTotal = people.reduce((sum, p) => sum + (parseFloat(p.owes) || 0), 0);
       const diff = Math.abs(parseFloat(amount) - (parseFloat(personal) + othersTotal));
       if (diff > 0.01) {
         return res.status(400).json({
@@ -93,12 +91,12 @@ router.post("/:sheetId", (req, res) => {
       date,
       description: description || "",
       amount: parseFloat(amount),
-      personal: others.length > 0 ? parseFloat(personal) : parseFloat(amount),
+      personal: people.length > 0 ? parseFloat(personal) : parseFloat(amount),
       category: category || "",
       categoryId: categoryId || null,
       method: method || "",
       taxReturnable: taxReturnable ? "yes" : "no",
-      people: others,
+      people,
       paymentMethodId: paymentMethodId || null,
       notes: notes || "",
     };
@@ -135,13 +133,11 @@ router.put("/:sheetId/:id", (req, res) => {
       return res.status(400).json({ success: false, message: "Date is required." });
     }
 
-    const others = (people || []).filter(p => p.name !== "You");
-
-    if (others.length > 0) {
+    if (people.length > 0) {
       if (personal == null || isNaN(parseFloat(personal))) {
         return res.status(400).json({ success: false, message: "Your share (personal) is required when participants are added." });
       }
-      const othersTotal = others.reduce((sum, p) => sum + (parseFloat(p.owes) || 0), 0);
+      const othersTotal = people.reduce((sum, p) => sum + (parseFloat(p.owes) || 0), 0);
       const diff = Math.abs(parseFloat(amount) - (parseFloat(personal) + othersTotal));
       if (diff > 0.01) {
         return res.status(400).json({
@@ -153,10 +149,10 @@ router.put("/:sheetId/:id", (req, res) => {
 
     updateOne(id, {
       date, description, amount: parseFloat(amount),
-      personal: others.length > 0 ? parseFloat(personal) : parseFloat(amount),
+      personal: people.length > 0 ? parseFloat(personal) : parseFloat(amount),
       category, categoryId: categoryId || null,
       method, paymentMethodId: paymentMethodId || null,
-      taxReturnable, people: others, notes,
+      taxReturnable, people: people, notes,
     });
 
     const updated = readOne(id);

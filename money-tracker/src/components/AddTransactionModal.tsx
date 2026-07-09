@@ -120,9 +120,22 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
 
   const addParticipant = (value) => {
     if (!value) return;
-    if (!people.find((p) => p.name === value)) {
-      setPeople((prev) => [...prev, { name: value, owes: "" }]);
+    
+
+    const participant = allParticipants.find((p)=> p.id === value)
+    
+    if (participant && !people.find((p) => p.name === value)) {
+      setPeople((prev) => [...prev, { id: value, name: participant.name, owes: "" }]);
     }
+
+  //   const person = people.find((p) => p.name === value);
+
+  // if (!person) {
+  //   setPeople((prev) => [...prev, { name: value, owes: "", id: "" }]);
+  // } else {
+  //   setPeople((prev) => [...prev, { name: value, owes: "", id: person.id }]);
+  // }
+    
     setShowParticipantDropdown(false);
   };
 
@@ -145,7 +158,8 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
         people: others,
         personal: others.length > 0 ? parseFloat(personal) : parseFloat(amount),
       };
-
+      console.log(payload);
+      
       let result;
       if (initialData?.id) {
         result = await updateTransaction(sheetId, initialData.id, payload);
@@ -404,7 +418,7 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
                   style={{ background: "#F0EBE3", border: "1.5px dashed #C9B9A8" }}>
                   <option value="" disabled>Select person</option>
                   {available.map((p) => (
-                    <option key={p.id} value={p.name}>{p.name}</option>
+                    <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
               ) : (

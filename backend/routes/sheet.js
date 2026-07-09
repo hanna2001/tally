@@ -38,6 +38,7 @@ router.get("/", (_req, res) => {
 router.get("/:id/budget", (req, res) => {
   try {
     const budget = getBudgetCategories(req.params.id);
+    
     res.json({ success: true, data: budget });
   } catch (err) {
     res.status(err.code || 500).json({ error: err.message });

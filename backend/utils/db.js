@@ -15,7 +15,7 @@ function getSheetId(name) {
 
 
 function getParticipants(transactionId) {
-  return db.prepare("SELECT name, owes, paid FROM participants WHERE transactionId = ?").all(transactionId);
+  return db.prepare("SELECT id, name, owes, paid, personId FROM participants WHERE transactionId = ?").all(transactionId);
 }
 
 function updateEffectiveAmount(transactionId) {
@@ -155,8 +155,7 @@ function totalTransactionAmout() {
 
 function appendOne(sheetId, transaction) {
   const personal = parseFloat(transaction.personal);
-  const people = (transaction.people || []).filter(p => p.name !== "You");
-  const unpaidOwes = people
+  const unpaidOwes = transaction.people
     .filter(p => !p.paid)
     .reduce((sum, p) => sum + parseFloat(p.owes), 0);
 
@@ -179,9 +178,9 @@ function appendOne(sheetId, transaction) {
       transaction.paymentMethodId || null
     );
 
-    for (const p of people) {
-      db.prepare(`INSERT INTO participants (id, transactionId, name, owes, paid) VALUES (?, ?, ?, ?, ?)`)
-        .run(randomUUID(), transaction.id, p.name, parseFloat(p.owes), p.paid ? 1 : 0);
+    for (const p of transaction.people) {
+      db.prepare(`INSERT INTO participants (id, transactionId, name, owes, paid, personId) VALUES (?, ?, ?, ?, ?, ?)`)
+     .run(randomUUID(), transaction.id, p.name, parseFloat(p.owes), p.paid ? 1 : 0, p.id || null);
     }
   });
   insert();
@@ -189,8 +188,7 @@ function appendOne(sheetId, transaction) {
 
 function updateOne(id, transaction) {
   const personal = parseFloat(transaction.personal);
-  const people = (transaction.people || []).filter(p => p.name !== "You");
-  const unpaidOwes = people
+  const unpaidOwes = transaction.people
     .filter(p => !p.paid)
     .reduce((sum, p) => sum + parseFloat(p.owes), 0);
 
@@ -214,9 +212,9 @@ function updateOne(id, transaction) {
     );
 
     db.prepare("DELETE FROM participants WHERE transactionId = ?").run(id);
-    for (const p of people) {
-      db.prepare(`INSERT INTO participants (id, transactionId, name, owes, paid) VALUES (?, ?, ?, ?, ?)`)
-        .run(randomUUID(), id, p.name, parseFloat(p.owes), p.paid ? 1 : 0);
+    for (const p of transaction.people) {
+      db.prepare(`INSERT INTO participants (id, transactionId, name, owes, paid, personId) VALUES (?, ?, ?, ?, ?, ?)`)
+  .run(randomUUID(), id, p.name, parseFloat(p.owes), p.paid ? 1 : 0, p.personId || null);
     }
   });
   update();
@@ -277,7 +275,6 @@ function getBudgetCategories(sheetId) {
   return db.prepare(`
     SELECT bc.*
     FROM budget_categories bc
-    LEFT JOIN categories c ON c.id = bc.categoryId
     WHERE bc.sheetId = ?
     ORDER BY bc.createdAt ASC
   `).all(sheetId);
