@@ -158,7 +158,6 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
         people: others,
         personal: others.length > 0 ? parseFloat(personal) : parseFloat(amount),
       };
-      console.log(payload);
       
       let result;
       if (initialData?.id) {

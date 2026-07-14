@@ -41,17 +41,22 @@ router.get("/", (_req, res) => {
 router.get("/:sheetId", (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
-    const limit = Math.min(100, parseInt(req.query.limit) || 100);
+    const limit = Math.min(100, parseInt(req.query.limit) || 20);
+    const filters = {
+      category: req.query.category || null,
+      search: req.query.search || null,
+      paymentMethod: req.query.paymentMethod || null,
+    };
 
-    const result = readAll(req.params.sheetId, page, limit);
+    const result = readAll(req.params.sheetId, page, limit, filters);
     res.json({
       success: true,
       data: result.data.map(transactionData),
       pagination: result.pagination,
     });
   } catch (err) {
-     const status = typeof err.code === "number" ? err.code : 500;
-    res.status(status|| 500).json({ success: false, message: err.message });
+    const status = typeof err.code === "number" ? err.code : 500;
+    res.status(status).json({ success: false, message: err.message });
   }
 });
 

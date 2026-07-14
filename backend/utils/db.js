@@ -39,18 +39,43 @@ function readOne(id) {
 }
 
 
-function readAll(sheetId, page = 1, limit = 100) {
+function readAll(sheetId, page = 1, limit = 20, filters = {}) {
+  const { category, search, paymentMethod } = filters;
+
+  const conditions = ["t.sheetId = ?"];
+  const params = [sheetId];
+
+  if (category) {
+    conditions.push("t.category = ?");
+    params.push(category);
+  }
+
+  if (paymentMethod) {
+    conditions.push("pm.name = ?");
+    params.push(paymentMethod);
+  }
+
+  if (search) {
+    conditions.push("t.description LIKE ?");
+    params.push(`%${search}%`);
+  }
+
+  const where = conditions.join(" AND ");
   const offset = (page - 1) * limit;
+
   const transactions = db.prepare(`
-    SELECT * FROM transactions
-    WHERE sheetId = ?
-    ORDER BY date DESC, id DESC
+    SELECT t.* FROM transactions t
+    LEFT JOIN payment_methods pm ON pm.id = t.paymentMethodId
+    WHERE ${where}
+    ORDER BY t.date DESC, t.id DESC
     LIMIT ? OFFSET ?
-  `).all(sheetId, limit, offset);
+  `).all(...params, limit, offset);
 
   const { total } = db.prepare(`
-    SELECT COUNT(*) as total FROM transactions WHERE sheetId = ?
-  `).get(sheetId);
+    SELECT COUNT(*) as total FROM transactions t
+    LEFT JOIN payment_methods pm ON pm.id = t.paymentMethodId
+    WHERE ${where}
+  `).get(...params);
 
   return {
     data: transactions.map(t => ({
@@ -58,9 +83,7 @@ function readAll(sheetId, page = 1, limit = 100) {
       participants: getParticipants(t.id),
     })),
     pagination: {
-      page,
-      limit,
-      total,
+      page, limit, total,
       totalPages: Math.ceil(total / limit),
       hasNextPage: page * limit < total,
       hasPrevPage: page > 1,
@@ -112,6 +135,10 @@ function getBudgetSummary(sheetId) {
 
   const totalBudget = sheet?.totalBudget || 0;
 
+  const payment = getPaymentMethodSummary(sheetId)
+  console.log(payment);
+  
+
   return {
     totalSpent,
     totalBudget,
@@ -124,7 +151,19 @@ function getBudgetSummary(sheetId) {
       pct: c.limitAmount > 0 ? (c.spent / c.limitAmount) * 100 : 0,
     })),
     transactionCategories,
+    paymentMethods: getPaymentMethodSummary(sheetId),
   };
+}
+
+function getPaymentMethodSummary(sheetId) {
+  return db.prepare(`
+    SELECT pm.name, COALESCE(SUM(t.amount), 0) as total
+    FROM transactions t
+    JOIN payment_methods pm ON pm.id = t.paymentMethodId
+    WHERE t.sheetId = ?
+    GROUP BY pm.id
+    ORDER BY total DESC
+  `).all(sheetId);
 }
 
 function totalTransactionAmout() {
@@ -196,7 +235,7 @@ function updateOne(id, transaction) {
     db.prepare(`
       UPDATE transactions SET
         date = ?, description = ?, amount = ?, personal = ?, effective_amount = ?,
-        category = ?, method = ?, taxReturnable = ?, notes = ?
+        category = ?, method = ?, taxReturnable = ?, notes = ?, categoryId = ?, paymentMethodId = ?
       WHERE id = ?
     `).run(
       transaction.date,
@@ -208,6 +247,8 @@ function updateOne(id, transaction) {
       transaction.method || "",
       transaction.taxReturnable === "yes" ? 1 : 0,
       transaction.notes || "",
+      transaction.categoryId || "",
+      transaction.paymentMethodId || "",
       id
     );
 

@@ -24,8 +24,13 @@ export async function getTransactionAmount() {
   return handleResponse(res);
 }
 
-export async function loadTransactions(sheetId, page = 1, limit = 100) {
-  const res = await fetch(`${BASE_URL}/${sheetId}?page=${page}&limit=${limit}`);
+export async function loadTransactions(sheetId, page = 1, limit = 20, filters = {}) {
+  const params = new URLSearchParams({ page, limit });
+  if (filters.category) params.append("category", filters.category);
+  if (filters.search) params.append("search", filters.search);
+  if (filters.paymentMethod) params.append("paymentMethod", filters.paymentMethod);
+
+  const res = await fetch(`${BASE_URL}/${sheetId}?${params.toString()}`);
   const json = await res.json();
   if (!json.success) throw new Error(json.message);
   return { data: json.data, pagination: json.pagination };
