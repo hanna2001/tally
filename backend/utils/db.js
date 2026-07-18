@@ -134,9 +134,6 @@ function getBudgetSummary(sheetId) {
   `).get(sheetId);
 
   const totalBudget = sheet?.totalBudget || 0;
-
-  const payment = getPaymentMethodSummary(sheetId)
-  console.log(payment);
   
 
   return {

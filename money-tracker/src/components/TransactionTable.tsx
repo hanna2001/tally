@@ -76,6 +76,7 @@ export default function TransactionTable({
   const [activePaymentMethod, setActivePaymentMethod] = useState(null);
   const [extraPaymentMethods, setExtraPaymentMethods] = useState([]);
   const [showMethodPicker, setShowMethodPicker] = useState(false);
+  const [filterMode, setFilterMode] = useState<"category" | "method">("category");
 
   // top 3 from summary + any extras added by user
   const top3 = (summary?.transactionCategories || []).slice(0, 3).map(c => c.name);
@@ -162,155 +163,183 @@ export default function TransactionTable({
         </button>
       </div>
 
-      {/* ── Search + Filter tabs ────────────────────────────────── */}
+      {/* ── Search + Filter tabs ────────────────────────────── */}
       <div style={{
         background: "#fff", borderRadius: 16, padding: "14px 16px",
         border: "0.5px solid #e8e2db", marginBottom: 16,
-        display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
       }}>
-        {/* Search */}
-        <div style={{ position: "relative", flexShrink: 0 }}>
-          <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#9a8f84" }}>
-            <SearchIcon />
-          </span>
-          <input
-            type="text" placeholder="Search transactions..." value={search}
-            onChange={(e) => handleSearch(e.target.value)}
-            style={{
-              paddingLeft: 30, paddingRight: 12, paddingTop: 8, paddingBottom: 8,
-              borderRadius: 20, border: "1px solid #e8e2db", fontSize: 13,
-              background: "#faf7f4", color: "#1a1714", outline: "none", width: 200,
-            }}
-          />
-        </div>
+        {/* Left — search + tabs */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", flex: 1 }}>
+          {/* Search */}
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#9a8f84" }}>
+              <SearchIcon />
+            </span>
+            <input
+              type="text" placeholder="Search transactions..." value={search}
+              onChange={(e) => handleSearch(e.target.value)}
+              style={{
+                paddingLeft: 30, paddingRight: 12, paddingTop: 8, paddingBottom: 8,
+                borderRadius: 20, border: "1px solid #e8e2db", fontSize: 13,
+                background: "#faf7f4", color: "#1a1714", outline: "none", width: 200,
+              }}
+            />
+          </div>
 
-        {/* Category tabs */}
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          {/* All button — clears both filters */}
           <button
-            onClick={() => handleCategoryFilter(null)}
+            onClick={() => {
+              setActiveCategory(null);
+              setActivePaymentMethod(null);
+              onFilterChange({ ...filters, category: null, paymentMethod: null });
+            }}
             style={{
               padding: "6px 16px", borderRadius: 20, fontSize: 12, fontWeight: 600,
               cursor: "pointer", border: "none",
-              background: !activeCategory ? "#8C5A3C" : "#f5f0eb",
-              color: !activeCategory ? "#fff" : "#8C5A3C",
+              background: !activeCategory && !activePaymentMethod ? "#8C5A3C" : "#f5f0eb",
+              color: !activeCategory && !activePaymentMethod ? "#fff" : "#8C5A3C",
             }}
           >
             All
           </button>
 
-          {filterTabs.map(cat => (
-            <button key={cat}
-              onClick={() => handleCategoryFilter(activeCategory === cat ? null : cat)}
-              style={{
-                padding: "6px 16px", borderRadius: 20, fontSize: 12, fontWeight: 500,
-                cursor: "pointer", border: "1px solid #e8e2db",
-                background: activeCategory === cat ? "#8C5A3C" : "#faf7f4",
-                color: activeCategory === cat ? "#fff" : "#5a4a3a",
-              }}
-            >
-              {cat}
-            </button>
-          ))}
-
-          {/* Add more filter */}
-          <div style={{ position: "relative" }}>
-            <button
-              onClick={() => setShowCategoryPicker(p => !p)}
-              style={{
-                width: 28, height: 28, borderRadius: "50%", border: "1px solid #e8e2db",
-                background: "#faf7f4", cursor: "pointer", display: "flex",
-                alignItems: "center", justifyContent: "center", color: "#9a8f84",
-              }}
-            >
-              <FilterIcon />
-            </button>
-            {showCategoryPicker && pickerOptions.length > 0 && (
-              <div style={{
-                position: "absolute", top: 34, left: 0, background: "#fff",
-                border: "0.5px solid #e8e2db", borderRadius: 12, padding: 8,
-                zIndex: 10, minWidth: 160, boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
-              }}>
-                {pickerOptions.map(cat => (
-                  <button key={cat}
-                    onClick={() => handleAddCategory(cat)}
-                    style={{
-                      display: "block", width: "100%", textAlign: "left",
-                      padding: "7px 12px", fontSize: 13, background: "none",
-                      border: "none", cursor: "pointer", color: "#1a1714",
-                      borderRadius: 8,
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "#f5f0eb")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "none")}
-                  >
-                    {cat}
-                  </button>
-                ))}
+          {/* Active filter tabs — show whichever mode is selected */}
+          {filterMode === "category" ? (
+            <>
+              {filterTabs.map(cat => (
+                <button key={cat}
+                  onClick={() => handleCategoryFilter(activeCategory === cat ? null : cat)}
+                  style={{
+                    padding: "6px 16px", borderRadius: 20, fontSize: 12, fontWeight: 500,
+                    cursor: "pointer", border: "1px solid #e8e2db",
+                    background: activeCategory === cat ? "#8C5A3C" : "#faf7f4",
+                    color: activeCategory === cat ? "#fff" : "#5a4a3a",
+                  }}
+                >
+                  {cat}
+                </button>
+              ))}
+              {/* Add more */}
+              <div style={{ position: "relative" }}>
+                <button
+                  onClick={() => setShowCategoryPicker(p => !p)}
+                  style={{
+                    width: 28, height: 28, borderRadius: "50%", border: "1px solid #e8e2db",
+                    background: "#faf7f4", cursor: "pointer", display: "flex",
+                    alignItems: "center", justifyContent: "center", color: "#9a8f84",
+                  }}
+                >
+                  <FilterIcon />
+                </button>
+                {showCategoryPicker && pickerOptions.length > 0 && (
+                  <div style={{
+                    position: "absolute", top: 34, left: 0, background: "#fff",
+                    border: "0.5px solid #e8e2db", borderRadius: 12, padding: 8,
+                    zIndex: 10, minWidth: 160, boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+                  }}>
+                    {pickerOptions.map(cat => (
+                      <button key={cat}
+                        onClick={() => handleAddCategory(cat)}
+                        style={{
+                          display: "block", width: "100%", textAlign: "left",
+                          padding: "7px 12px", fontSize: 13, background: "none",
+                          border: "none", cursor: "pointer", color: "#1a1714", borderRadius: 8,
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.background = "#f5f0eb")}
+                        onMouseLeave={e => (e.currentTarget.style.background = "none")}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          ) : (
+            <>
+              {methodTabs.map(m => (
+                <button key={m}
+                  onClick={() => handleMethodFilter(activePaymentMethod === m ? null : m)}
+                  style={{
+                    padding: "6px 16px", borderRadius: 20, fontSize: 12, fontWeight: 500,
+                    cursor: "pointer", border: "1px solid #e8e2db",
+                    background: activePaymentMethod === m ? "#8C5A3C" : "#faf7f4",
+                    color: activePaymentMethod === m ? "#fff" : "#5a4a3a",
+                  }}
+                >
+                  {m}
+                </button>
+              ))}
+              {/* Add more */}
+              <div style={{ position: "relative" }}>
+                <button
+                  onClick={() => setShowMethodPicker(p => !p)}
+                  style={{
+                    width: 28, height: 28, borderRadius: "50%", border: "1px solid #e8e2db",
+                    background: "#faf7f4", cursor: "pointer", display: "flex",
+                    alignItems: "center", justifyContent: "center", color: "#9a8f84",
+                  }}
+                >
+                  <FilterIcon />
+                </button>
+                {showMethodPicker && methodPickerOptions.length > 0 && (
+                  <div style={{
+                    position: "absolute", top: 34, left: 0, background: "#fff",
+                    border: "0.5px solid #e8e2db", borderRadius: 12, padding: 8,
+                    zIndex: 10, minWidth: 160, boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+                  }}>
+                    {methodPickerOptions.map(m => (
+                      <button key={m}
+                        onClick={() => handleAddMethod(m)}
+                        style={{
+                          display: "block", width: "100%", textAlign: "left",
+                          padding: "7px 12px", fontSize: 13, background: "none",
+                          border: "none", cursor: "pointer", color: "#1a1714", borderRadius: 8,
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.background = "#f5f0eb")}
+                        onMouseLeave={e => (e.currentTarget.style.background = "none")}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
-        {/* Payment method tabs */}
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+
+        {/* Right — BY CATEGORY | BY METHOD toggle */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 0,
+          border: "1px solid #e8e2db", borderRadius: 20, overflow: "hidden", flexShrink: 0,
+        }}>
           <button
-            onClick={() => handleMethodFilter(null)}
+            onClick={() => setFilterMode("category")}
             style={{
-              padding: "6px 16px", borderRadius: 20, fontSize: 12, fontWeight: 600,
-              cursor: "pointer", border: "none",
-              background: !activePaymentMethod ? "#8C5A3C" : "#f5f0eb",
-              color: !activePaymentMethod ? "#fff" : "#8C5A3C",
+              padding: "6px 14px", fontSize: 11, fontWeight: 600,
+              letterSpacing: "0.08em", border: "none", cursor: "pointer",
+              background: filterMode === "category" ? "#f5f0eb" : "transparent",
+              color: filterMode === "category" ? "#8C5A3C" : "#9a8f84",
+              transition: "all 0.15s",
             }}
           >
-            All
+            BY CATEGORY
           </button>
-
-          {methodTabs.map(m => (
-            <button key={m}
-              onClick={() => handleMethodFilter(activePaymentMethod === m ? null : m)}
-              style={{
-                padding: "6px 16px", borderRadius: 20, fontSize: 12, fontWeight: 500,
-                cursor: "pointer", border: "1px solid #e8e2db",
-                background: activePaymentMethod === m ? "#8C5A3C" : "#faf7f4",
-                color: activePaymentMethod === m ? "#fff" : "#5a4a3a",
-              }}
-            >
-              {m}
-            </button>
-          ))}
-
-          <div style={{ position: "relative" }}>
-            <button
-              onClick={() => setShowMethodPicker(p => !p)}
-              style={{
-                width: 28, height: 28, borderRadius: "50%", border: "1px solid #e8e2db",
-                background: "#faf7f4", cursor: "pointer", display: "flex",
-                alignItems: "center", justifyContent: "center", color: "#9a8f84",
-              }}
-            >
-              <FilterIcon />
-            </button>
-            {showMethodPicker && methodPickerOptions.length > 0 && (
-              <div style={{
-                position: "absolute", top: 34, left: 0, background: "#fff",
-                border: "0.5px solid #e8e2db", borderRadius: 12, padding: 8,
-                zIndex: 10, minWidth: 160, boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
-              }}>
-                {methodPickerOptions.map(m => (
-                  <button key={m}
-                    onClick={() => handleAddMethod(m)}
-                    style={{
-                      display: "block", width: "100%", textAlign: "left",
-                      padding: "7px 12px", fontSize: 13, background: "none",
-                      border: "none", cursor: "pointer", color: "#1a1714", borderRadius: 8,
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "#f5f0eb")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "none")}
-                  >
-                    {m}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <div style={{ width: 1, height: 20, background: "#e8e2db" }} />
+          <button
+            onClick={() => setFilterMode("method")}
+            style={{
+              padding: "6px 14px", fontSize: 11, fontWeight: 600,
+              letterSpacing: "0.08em", border: "none", cursor: "pointer",
+              background: filterMode === "method" ? "#f5f0eb" : "transparent",
+              color: filterMode === "method" ? "#8C5A3C" : "#9a8f84",
+              transition: "all 0.15s",
+            }}
+          >
+            BY METHOD
+          </button>
         </div>
       </div>
 

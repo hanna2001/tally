@@ -88,6 +88,10 @@ router.post("/:sheetId", (req, res) => {
           message: `Your share (₹${parseFloat(personal).toFixed(2)}) + participants (₹${othersTotal.toFixed(2)}) must equal total (₹${parseFloat(amount).toFixed(2)}).`,
         });
       }
+      people.forEach(p => {
+        if(!p.owes)
+            p.owes = 0;
+      })
     }
 
     const transaction = {
@@ -150,6 +154,10 @@ router.put("/:sheetId/:id", (req, res) => {
           message: `Your share (₹${parseFloat(personal).toFixed(2)}) + participants (₹${othersTotal.toFixed(2)}) must equal total (₹${parseFloat(amount).toFixed(2)}).`,
         });
       }
+      people.forEach(p => {
+        if(!p.owes)
+            p.owes = 0;
+      })
     }
 
     updateOne(id, {

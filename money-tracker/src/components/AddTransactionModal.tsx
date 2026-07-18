@@ -24,8 +24,8 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const [amount, setAmount] = useState(initialData?.amount ?? "");
-  const [personal, setPersonal] = useState(initialData?.personal ?? "");
+  const [amount, setAmount] = useState(initialData?.amount ?? 0);
+  const [personal, setPersonal] = useState(initialData?.personal ?? 0);
   const [date, setDate] = useState(initialData?.date ?? "");
   const [description, setDescription] = useState(initialData?.description ?? "");
   const [categoryId, setCategoryId] = useState(initialData?.categoryId ?? "");
@@ -55,8 +55,8 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
   // ── Sync initialData changes ──────────────────────────────────
   useEffect(() => {
     if (!initialData) return;
-    setAmount(initialData.amount ?? "");
-    setPersonal(initialData.personal ?? "");
+    setAmount(initialData.amount ?? 0);
+    setPersonal(initialData.personal ?? 0);
     setDate(initialData.date ?? "");
     setDescription(initialData.description ?? "");
     setCategory(initialData.category ?? "");
@@ -111,9 +111,8 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
   const personalAmount = parseFloat(personal) || 0;
   const remaining = parseFloat((personalAmount + participantTotal - totalAmount).toFixed(2));
   const isOver = remaining > 0;
-  const isBalanced = totalAmount > 0 && people.length > 0 && 
-    !!personal &&
-    Math.abs(remaining) < 0.01;
+  const isBalanced = totalAmount > 0 && people.length > 0 && personal>=0 && Math.abs(remaining) < 0.01;
+  console.log(totalAmount > 0, people.length > 0 , personal>=0 ,!!personal , Math.abs(remaining) < 0.01)
 
   // ── Handlers ──────────────────────────────────────────────────
   const removeParticipant = (name) => setPeople(people.filter((p) => p.name !== name));
@@ -356,18 +355,18 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
                     <input
                       type="text" inputMode="decimal" placeholder="0.00" value={personal}
                       onChange={(e) => {
-                        const v = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*?)\..*/g, "$1");
+                        const v = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*?)\..*/g, "$1")||0;
                         setPersonal(v);
                       }}
                       className="w-full pl-7 pr-3 py-3 rounded-xl text-sm text-[#2C1F0E] placeholder-[#BFB4A6] outline-none transition-all focus:ring-2 focus:ring-[#C4894B]/20"
                       style={inputBase}
                     />
                   </div>
-                  {personal && Math.abs(remaining) > 0.01 && (
+                  {/* {personal>=0 && Math.abs(remaining) > 0.01 && (
                     <p className="text-[11px] text-red-500">
                       Your share (₹{personalAmount.toFixed(2)}) + others (₹{participantTotal.toFixed(2)}) must equal total (₹{totalAmount.toFixed(2)})
                     </p>
-                  )}
+                  )} */}
                 </div>
 
                 {/* Balance bar */}
@@ -459,7 +458,7 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
               disabled={
                 saving || saveSuccess ||
                 (people.length > 0 && totalAmount > 0 && !isBalanced) ||
-                (people.length > 0 && (!personal || isNaN(parseFloat(personal))))
+                (people.length > 0 && (personal || isNaN(parseFloat(personal))))
               }
               className="flex-1 py-3.5 rounded-xl text-sm font-medium text-[#FFF8F0] transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 flex items-center justify-center gap-2"
               style={{ background: saveSuccess ? "#16a34a" : "#8B5E2E", boxShadow: "0 4px 16px rgba(139,94,46,0.28)" }}>
