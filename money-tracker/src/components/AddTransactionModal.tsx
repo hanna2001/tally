@@ -24,7 +24,7 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const [amount, setAmount] = useState(initialData?.amount ?? 0);
+  const [amount, setAmount] = useState(initialData?.amount ?? "");
   const [personal, setPersonal] = useState(initialData?.personal ?? 0);
   const [date, setDate] = useState(initialData?.date ?? "");
   const [description, setDescription] = useState(initialData?.description ?? "");
@@ -113,6 +113,7 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
   const isOver = remaining > 0;
   const isBalanced = totalAmount > 0 && people.length > 0 && personal>=0 && Math.abs(remaining) < 0.01;
   console.log(totalAmount > 0, people.length > 0 , personal>=0 ,!!personal , Math.abs(remaining) < 0.01)
+  console.log(isBalanced)
 
   // ── Handlers ──────────────────────────────────────────────────
   const removeParticipant = (name) => setPeople(people.filter((p) => p.name !== name));
@@ -362,11 +363,11 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
                       style={inputBase}
                     />
                   </div>
-                  {/* {personal>=0 && Math.abs(remaining) > 0.01 && (
+                  {personal>=0 && Math.abs(remaining) > 0.01 && (
                     <p className="text-[11px] text-red-500">
                       Your share (₹{personalAmount.toFixed(2)}) + others (₹{participantTotal.toFixed(2)}) must equal total (₹{totalAmount.toFixed(2)})
                     </p>
-                  )} */}
+                  )}
                 </div>
 
                 {/* Balance bar */}
@@ -458,7 +459,7 @@ export default function AddTransactionModal({ sheetName, sheetId, onClose, onSav
               disabled={
                 saving || saveSuccess ||
                 (people.length > 0 && totalAmount > 0 && !isBalanced) ||
-                (people.length > 0 && (personal || isNaN(parseFloat(personal))))
+                (people.length > 0 && (!(personal>=0) || isNaN(parseFloat(personal))))
               }
               className="flex-1 py-3.5 rounded-xl text-sm font-medium text-[#FFF8F0] transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 flex items-center justify-center gap-2"
               style={{ background: saveSuccess ? "#16a34a" : "#8B5E2E", boxShadow: "0 4px 16px rgba(139,94,46,0.28)" }}>
